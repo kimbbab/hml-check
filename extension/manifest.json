@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "HML 바로 검사",
+  "version": "3.0",
+  "description": "문제은행 CMS 문항 상세·수정 화면 옆에 HML 원본과 HTML 비교 결과를 띄웁니다. 검사 코드는 열 때마다 최신판을 받아 씁니다. 읽기 전용.",
+  "content_scripts": [
+    { "matches": ["https://itemcms.dongahub.com/item/all/*"], "js": ["loader.js"], "run_at": "document_idle", "world": "MAIN" }
+  ]
+}
