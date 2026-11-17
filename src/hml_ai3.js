@@ -39,13 +39,60 @@
     let m=/detail\.donga/.test(location.pathname)?read(document):{}; if(!Object.keys(m).length) m=read(await getDoc('/item/all/detail.donga'+Q+'itemId='+id));
     const out={}; for(const k of Object.keys(m)) if(META_KEYS.some(x=>k.includes(x))) out[k]=m[k]; return A.meta[id]=out; }
 
+  // ---------- 미리 돌린 눈검수 결과(HML_DOWNLOAD 폴더) ----------
+  // 처음 한 번 폴더를 고르면 수정목록.json·시험지별 ai.json·메타점검.json을 읽어 문항ID별 색인을 만들고 이 브라우저(IndexedDB)에 저장.
+  // 다음부터는 저장한 색인을 바로 씀(폴더 권한을 다시 묻지 않음). '새로 읽기'를 누를 때만 폴더를 다시 읽음.
+  function idb(mode,fn){ return new Promise((ok,no)=>{ const r=indexedDB.open('hmlAi3',1); r.onupgradeneeded=()=>r.result.createObjectStore('kv');
+    r.onerror=()=>no(r.error); r.onsuccess=()=>{ try{ const tx=r.result.transaction('kv',mode); const q=fn(tx.objectStore('kv')); tx.oncomplete=()=>{ ok(q&&q.result); r.result.close(); }; tx.onerror=tx.onabort=()=>{ no(tx.error); r.result.close(); }; }catch(e){ no(e); r.result.close(); } }; }); }
+  const kvGet=k=>idb('readonly',st=>st.get(k)), kvPut=(k,v)=>idb('readwrite',st=>st.put(v,k));
+  const readJson=async(dir,name)=>{ try{ return JSON.parse(await (await (await dir.getFileHandle(name)).getFile()).text()); }catch(e){ return null; } };
+  async function buildIndex(root,msg){ const idx={}; const at=id=>idx[id]=idx[id]||{};
+    const j=await readJson(root,'수정목록.json');
+    if(j) for(const q of (j.queue||[])){ const id=q.itemId||((q.iss||[]).find(x=>x[1])||[])[1]; if(!id) continue; Object.assign(at(String(id)),{sid:q.sid,no:q.no,sname:q.sname,queue:q.iss||[]}); }
+    const dirs=[]; for await (const [name,h] of root.entries()) if(h.kind==='directory'&&/^\d+_/.test(name)) dirs.push([name,h]);
+    let k=0, n=0; const one=async()=>{ while(k<dirs.length){ const [name,h]=dirs[k++]; n++; if(msg&&n%20===0) msg('폴더 읽는 중… '+n+'/'+dirs.length);
+        const sid=name.split('_')[0]; const ai=await readJson(h,'ai.json'), me=await readJson(h,'메타점검.json');
+        for(const [no,it] of Object.entries((ai&&ai.items)||{})){ if(!it||!it.itemId) continue; const e=at(String(it.itemId)); e.sid=e.sid||sid; e.no=e.no||no; e.sname=e.sname||name.slice(sid.length+1);
+          if(it.vision) e.vision=it.vision; if(Array.isArray(it.problem)&&it.problem.length) e.problem=it.problem; if(ai.model) e.model=ai.model; }
+        for(const [no,it] of Object.entries((me&&me.items)||{})){ if(!it||!it.itemId||!(it.issues||[]).length) continue; const e=at(String(it.itemId)); e.sid=e.sid||sid; e.no=e.no||no; e.meta=it.issues; } } };
+    await Promise.all(Array.from({length:8},one));
+    return {at:Date.now(),made:j&&j.made,sheets:dirs.length,n:Object.keys(idx).length,idx}; }
+  async function loadPre(){ if(A.pre!==undefined) return A.pre; try{ A.pre=(await kvGet('index'))||null; }catch(e){ A.pre=null; } return A.pre; }
+  async function connect(pick){ const P=box()&&box().querySelector('[data-pre]'); const say=t=>{ if(P) P.innerHTML='<span style="color:#666">'+esc(t)+'</span>'; };
+    try{ let root=pick?null:await kvGet('root').catch(()=>null);
+      if(root&&(await root.queryPermission({mode:'read'}))!=='granted'&&(await root.requestPermission({mode:'read'}))!=='granted') root=null;
+      if(!root){ root=await window.showDirectoryPicker({id:'hml-archive',mode:'read'}); await kvPut('root',root).catch(()=>{}); }
+      say('HML_DOWNLOAD 폴더를 읽는 중…'); const ix=await buildIndex(root,say); if(!ix.n) throw new Error('이 폴더에서 검수 결과(수정목록.json, 시험지 폴더의 ai.json)를 찾지 못했습니다. HML_DOWNLOAD 폴더를 골라 주세요.');
+      await kvPut('index',ix).catch(()=>{}); A.pre=ix; lastId=null; tick(); }
+    catch(e){ if(e.name==='AbortError') { showPre(itemIdOf()); return; } say('폴더를 읽지 못했습니다: '+e.message); } }
+  async function showPre(id){ const b=box(); if(!b) return; const P=b.querySelector('[data-pre]'); const ix=await loadPre();
+    const tag=(t,c)=>'<span style="display:inline-block;padding:0 6px;border-radius:4px;color:#fff;font-size:12px;margin-right:6px;background:'+c+'">'+esc(t)+'</span>';
+    if(!ix){ P.innerHTML='<b>미리 돌린 눈검수</b> <button data-con>HML_DOWNLOAD 폴더 연결</button> <span style="color:#666">처음 한 번만 고르면 문항마다 결과가 자동으로 나옵니다.</span>'; P.querySelector('[data-con]').onclick=()=>connect(true); return; }
+    const e=ix.idx[String(id)]; const when=new Date(ix.made||ix.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    let h='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b>미리 돌린 눈검수</b><span style="font-size:11px;color:#888">'+esc(when)+' 기준 · '+ix.n+'문항</span><span style="flex:1"></span><button data-re title="HML_DOWNLOAD 폴더를 다시 읽음(합치기 뒤에 누르세요)">새로 읽기</button></div>';
+    if(!e) h+='<div style="margin-top:4px;color:#666">이 문항은 미리 돌린 결과가 없습니다(검수 대상 아님 또는 걸린 것 없음). 필요하면 아래 <b>이 문항 AI 검사</b>를 누르세요.</div>';
+    else{ const lines=[]; let k=0; const vs=(e.vision&&e.vision.verdicts)||[];
+      for(const x of (e.queue||[])){ if(x[2]==='화면') lines.push(tag('화면','#1a73e8')+esc(x[3])); else if(x[2]==='AI') lines.push(tag('AI 추가','#d93025')+esc(x[4]));
+        else if(x[2]==='내용'){ k++; const v=(x[5]&&typeof x[5]==='object')?x[5]:null; lines.push(tag(v?(v.real?'고칠 것':'표기만 다름'):'눈 판정 전',v?(v.real?'#d93025':'#5f6368'):'#e37400')+esc(x[3])+(v&&v.reason?' <span style="color:#666">'+esc(v.reason)+'</span>':'')+'<div style="font-family:monospace;font-size:11px;color:#555;white-space:pre-wrap">'+esc(String(x[4]||'').slice(0,300))+'</div>'); } }
+      if(!e.queue&&vs.length) vs.forEach(v=>lines.push(tag(v.real?'고칠 것':'표기만 다름',v.real?'#d93025':'#5f6368')+esc(v.reason)));
+      if(!e.queue&&e.vision) ((e.vision.other)||[]).forEach(o=>lines.push(tag('AI 추가','#d93025')+esc(o.detail)));
+      (e.problem||[]).forEach(p=>lines.push(tag('문제 오류?','#a142f4')+esc((p.type||'')+' · '+(p.where||'')+': '+(p.detail||''))));
+      (e.meta||[]).forEach(m=>lines.push(tag('메타 '+(m['항목']||''),'#e37400')+esc(m['내용']||'')+(m['제안']?' <span style="color:#666">→ '+esc(m['제안'])+'</span>':'')));
+      const real=(e.queue||[]).some(x=>x[2]==='AI'||(x[2]==='내용'&&!(x[5]&&x[5].real===false)))||vs.some(v=>v.real)||(e.problem||[]).length||(e.meta||[]).length;
+      h+='<div style="margin-top:4px;color:#555;font-size:12px">시험지 '+esc(e.sid)+(e.sname?' '+esc(e.sname):'')+' · #'+esc(e.no)+'</div>';
+      h+=lines.length?'<ul style="margin:4px 0;padding-left:18px">'+lines.map(l=>'<li style="margin:2px 0">'+l+'</li>').join('')+'</ul>':'';
+      if(!real) h+='<div style="margin-top:4px;padding:4px 8px;border-radius:4px;background:#e6f4ea;color:#188038;font-weight:bold">✓ 미리 검수: 고칠 내용 없음'+(e.queue?'':' (표기 차이뿐)')+'</div>';
+      h+='<div style="font-size:11px;color:#888;margin-top:2px">미리 검수한 때의 결과입니다. 그 뒤 고쳤다면 바로 검사(아래) 결과가 최신입니다.</div>'; }
+    P.innerHTML=h; const re=P.querySelector('[data-re]'); if(re) re.onclick=()=>connect(false); }
+
   // ---------- 칸 그리기 ----------
   const opt=()=>({model:LS('hmlAi3Model')||'claude-haiku-5-5',solve:LS('hmlAi3Solve')!=='0',meta:LS('hmlAi3Meta')!=='0',auto:LS('hmlAi3Auto')==='1'});
   function box(){ const p=panelEl(); if(!p) return null; let b=p.querySelector('[data-ai3]'); if(b) return b;
     const body=p.querySelector('[data-b]'); if(!body) return null; const o=opt();
     b=document.createElement('div'); b.setAttribute('data-ai3','');
     b.style.cssText='border-bottom:1px solid #ddd;background:#f8f3fb;padding:8px 10px;font-size:13px;max-height:45%;overflow:auto;flex:none';
-    b.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"><b style="color:#7b1fa2">AI 눈검수</b>'+
+    b.innerHTML='<div data-pre style="margin-bottom:6px;padding-bottom:6px;border-bottom:1px dashed #d7c4e4"></div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"><b style="color:#7b1fa2">AI 바로 검사</b>'+
       '<button data-go style="border:0;padding:4px 10px;border-radius:4px;color:#fff;background:#7b1fa2;cursor:pointer;font-weight:bold">이 문항 AI 검사</button>'+
       '<select data-model title="모델"><option value="claude-haiku-5-5">Haiku 5.5 (빠름·저렴)</option><option value="claude-sonnet-5-5">Sonnet 5.5 (정확)</option></select>'+
       '<label><input type="checkbox" data-solve> 문제풀이</label><label><input type="checkbox" data-meta> 메타정보</label><label title="문항을 넘길 때마다 자동으로 AI 검사(문항마다 비용이 듭니다)"><input type="checkbox" data-auto> 넘길 때 자동</label>'+
@@ -95,7 +142,7 @@
   // ---------- 바로 검사 칸이 생기거나 문항이 바뀌면 붙이기 ----------
   let lastId=null, tm=null;
   function tick(){ if(!box()) return; const id=itemIdOf(); if(K().busy) return;
-    if(id!==lastId){ lastId=id; if(A.cache[id]) render(id,A.cache[id]); else if(opt().auto) run(); else out('버튼을 누르면 HML 캡처와 HTML을 AI가 비교합니다.'); } }
+    if(id!==lastId){ lastId=id; showPre(id).catch(()=>{}); if(A.cache[id]) render(id,A.cache[id]); else if(opt().auto) run(); else out('미리 돌린 결과가 없거나, 고친 뒤 다시 확인할 때 <b>이 문항 AI 검사</b>를 누르세요.'); } }
   if(!A.obs){ A.obs=new MutationObserver(()=>{ clearTimeout(tm); tm=setTimeout(tick,600); }); A.obs.observe(document.body,{childList:true,subtree:true}); }
   tick();
 })();
