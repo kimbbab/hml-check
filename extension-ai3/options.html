@@ -1,0 +1,10 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>AI 눈검수 설정</title>
+<style>body{font-family:sans-serif;max-width:620px;margin:30px auto;padding:0 16px;line-height:1.6;color:#222}input[type=password]{width:100%;padding:6px;font-size:14px}button{padding:6px 14px;margin-right:6px}.m{color:#666;font-size:13px}#st{margin-top:10px;font-weight:bold}</style></head><body>
+<h2>AI 눈검수 설정</h2>
+<p>Claude API 키(<code>sk-ant-…</code>)를 넣으세요. 키는 <b>이 PC의 이 확장 안에만</b> 저장되고, CMS 페이지나 GitHub로는 가지 않습니다. Anthropic API로만 보냅니다.</p>
+<p><input id="key" type="password" autocomplete="off" placeholder="sk-ant-..."></p>
+<p><button id="save">저장</button><button id="test">키 시험</button><button id="del">키 지우기</button></p>
+<div id="st"></div>
+<h3>사용 금액</h3><p id="cost" class="m"></p><p><button id="reset">누적 금액 0으로</button></p>
+<p class="m">문항 화면 오른쪽 '바로 검사' 칸 위쪽의 <b>이 문항 AI 검사</b> 버튼으로 씁니다. 금액은 API 응답의 토큰 수로 계산한 추정치입니다. 정확한 청구액은 Claude Console에서 확인하세요.</p>
+<script src="options.js"></script></body></html>

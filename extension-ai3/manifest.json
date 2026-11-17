@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "HML 바로 검사 + AI 눈검수",
+  "version": "4.0",
+  "description": "문제은행 CMS 문항 화면 옆에 바로 검사(ver2)와 AI 눈검수(ver3)를 띄웁니다. API 키는 이 PC의 확장 안에만 저장됩니다. CMS는 읽기만 합니다.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://items.dongahub.com/*", "https://api.anthropic.com/*"],
+  "background": { "service_worker": "sw.js" },
+  "options_page": "options.html",
+  "action": { "default_title": "AI 눈검수 설정(API 키)" },
+  "content_scripts": [
+    { "matches": ["https://itemcms.dongahub.com/item/all/*"], "js": ["bridge.js"], "run_at": "document_start" },
+    { "matches": ["https://itemcms.dongahub.com/item/all/*"], "js": ["loader.js"], "run_at": "document_idle", "world": "MAIN" }
+  ]
+}

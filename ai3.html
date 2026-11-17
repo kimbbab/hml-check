@@ -1,0 +1,12 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI 눈검수 설치</title>
+<style>body{font-family:sans-serif;max-width:760px;margin:30px auto;padding:0 16px;line-height:1.6;color:#222}li{margin:6px 0}code{background:#f1f3f4;padding:1px 4px;border-radius:3px}.m{color:#666;font-size:13px}</style></head><body>
+<h2>바로 검사 + AI 눈검수 (ver3)</h2><p class="m">최신판: 2026-11-17 10:34 · 바로 검사(ver2)가 모두 들어 있어서 ver2 확장 대신 이것 하나만 켜면 됩니다.</p>
+<ol><li><a href="hml-ai3-extension.zip">hml-ai3-extension.zip</a>을 받아 지우지 않을 폴더에 풉니다.</li>
+<li><code>edge://extensions</code>(크롬은 <code>chrome://extensions</code>) → <b>개발자 모드</b> 켜기 → <b>압축을 푼 항목 로드</b> → 푼 <code>HML_AI눈검수</code> 폴더 선택.</li>
+<li>예전 <b>HML 바로 검사</b>(ver2) 확장은 <b>끄기</b>(둘 다 켜 두면 칸이 두 번 뜰 수 있음).</li>
+<li>확장 아이콘(퍼즐 모양 → HML 바로 검사 + AI 눈검수)을 누르면 설정 창이 열립니다. Claude API 키(<code>sk-ant-…</code>)를 넣고 <b>저장</b> → <b>키 시험</b>.</li>
+<li>CMS 문항 화면에서 <b>◀ 바로 검사</b> 탭을 열면 위쪽에 보라색 칸이 생깁니다. 처음 한 번 <b>HML_DOWNLOAD 폴더 연결</b>을 누르면, 그 뒤로는 문항마다 <b>미리 돌린 눈검수 결과</b>(수정목록.json·ai.json·메타점검.json)가 자동으로 나옵니다. 눈검수를 새로 합친 뒤에는 <b>새로 읽기</b>.</li>
+<li>미리 돌린 결과가 없거나, 고친 뒤 다시 확인할 때만 <b>이 문항 AI 검사</b>를 누르세요(API 비용이 듭니다).</li></ol>
+<h3>무엇을 보나</h3><ul><li>HML 캡처(문제·해답)와 HTML 내용의 글자·수식 차이, 바로 검사가 찾은 차이가 진짜인지(표기만 다른지)</li><li>체크하면: 문제풀이(AI 답과 HTML 정답 비교), 메타정보(유형정보·성취기준 등이 내용과 맞는지)</li><li>캡처 이미지 자체가 깨진 곳(겹침 등)</li></ul>
+<p class="m">API 키는 이 PC의 확장 안에만 저장되고 CMS 페이지·GitHub로 가지 않습니다. 문항마다 비용이 들고(Haiku 5.5 기준 보통 1~5원), 결과 아래에 이 문항 금액과 누적 금액이 나옵니다. CMS는 읽기만 합니다.</p>
+</body></html>
