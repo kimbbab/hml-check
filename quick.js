@@ -1,5 +1,5 @@
-/* HML 바로 검사 2026-11-17 10:26 */
-(function(){window.__hmlBuild='2026-11-17 10:26';document.documentElement.setAttribute('data-hml-quick','2026-11-17 10:26');
+/* HML 바로 검사 2026-11-17 13:30 */
+(function(){window.__hmlBuild='2026-11-17 13:30';document.documentElement.setAttribute('data-hml-quick','2026-11-17 13:30');
 (() => {
   const Q = String.fromCharCode(63);
   const NARROW = 360;           // 좁은 화면 점검 폭(px)
@@ -368,13 +368,23 @@
     el.innerHTML='<div data-grip title="끌어서 폭 조절" style="position:absolute;left:-4px;top:0;bottom:0;width:8px;cursor:col-resize"></div>'+
       '<div data-tab style="display:none;writing-mode:vertical-rl;padding:12px 6px;cursor:pointer;font-weight:bold;color:#1a73e8">◀ 바로 검사 펼치기</div>'+
       '<div data-head style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;border-bottom:1px solid #ddd;background:#f4f5f7"><b>바로 검사</b><span style="font-size:11px;color:#999">'+esc(window.__hmlBuild||'')+'</span><span style="flex:1"></span>'+
-      '<button data-pv>◀ 이전</button><button data-nx>다음 ▶</button><button data-r style="border:0;padding:4px 10px;border-radius:4px;color:#fff;background:#1a73e8;cursor:pointer">↻ 다시 비교</button><button data-up title="새 버전이 있는지 확인">업데이트 확인</button><button data-f title="접기">▶ 접기</button><button data-x>닫기</button>'+
+      '<button data-pv>◀ 이전</button><button data-nx>다음 ▶</button><button data-r style="border:0;padding:4px 10px;border-radius:4px;color:#fff;background:#1a73e8;cursor:pointer">↻ 다시 비교</button><button data-hwp title="이 화면의 [한글 편집기 열기]를 대신 누름(한글(HML) 수정 탭으로 자동 이동)" style="border:0;padding:4px 10px;border-radius:4px;color:#fff;background:#0b57d0;cursor:pointer">한글 편집기</button><button data-apply title="이 화면의 [전체 반영]을 대신 누름" style="border:0;padding:4px 10px;border-radius:4px;color:#fff;background:#188038;cursor:pointer">전체 반영</button><button data-up title="새 버전이 있는지 확인">업데이트 확인</button><button data-f title="접기">▶ 접기</button><button data-x>닫기</button>'+
       '<div data-t style="flex-basis:100%;font-size:12px;color:#666"></div></div><div data-b style="overflow:auto;padding:12px;flex:1"></div>';
     el.querySelector('[data-r]').onclick=()=>{ K.fresh=true; run(); };
     const up=el.querySelector('[data-up]'); if(!window.__hmlQuickUpdate) up.style.display='none';
     up.onclick=async()=>{ const t=el.querySelector('[data-t]'); up.disabled=true; t.textContent='새 버전을 확인하는 중…';
       try{ const r=await window.__hmlQuickUpdate(); if(r.updated){ t.textContent='새 버전('+r.build+')을 받았습니다. 페이지를 새로 고침하면 적용됩니다.'; if(confirm('새 버전('+r.build+')을 받았습니다. 지금 새로 고칠까요?')) location.reload(); } else t.textContent='이미 최신 버전입니다('+r.build+').'; }
       catch(e){ t.textContent='확인하지 못했습니다: '+e.message; } finally{ up.disabled=false; } };
+    // 문항 수정 화면의 버튼을 옆 칸에서 대신 누름(사용자가 직접 누른 것과 같음). 화면에 보이는 첫 버튼을 누름
+    const norm=b=>(b.textContent||b.value||'').replace(/\s+/g,'');
+    const visBtn=re=>[...document.querySelectorAll('a,button,input[type=button],input[type=submit]')].find(b=>!el.contains(b)&&re.test(norm(b))&&b.getClientRects().length&&!b.disabled);
+    const note=t=>{ el.querySelector('[data-t]').textContent=t; };
+    el.querySelector('[data-hwp]').onclick=async()=>{ let b=visBtn(/^한글편집기열기$/);
+      if(!b){ const tab=visBtn(/^한글\(HML\)수정$/); if(!tab){ note('이 화면에는 한글 편집기 버튼이 없습니다(문항 수정 화면에서 쓰세요).'); return; } tab.click();
+        for(let i=0;i<20&&!b;i++){ await new Promise(r=>setTimeout(r,150)); b=visBtn(/^한글편집기열기$/); } }
+      if(b){ b.click(); note('한글 편집기를 열었습니다. 편집기에서 저장한 뒤 [전체 반영]을 누르세요.'); } else note('한글 편집기 버튼을 찾지 못했습니다.'); };
+    el.querySelector('[data-apply]').onclick=()=>{ const b=visBtn(/^전체반영$/); if(!b){ note('이 화면에는 전체 반영 버튼이 없습니다.'); return; }
+      b.click(); note('[전체 반영]을 눌렀습니다. 반영이 끝나면 ↻ 다시 비교를 누르세요.'); };
     const pageBtn=word=>[...document.querySelectorAll('a,button')].find(a=>!el.contains(a)&&a.textContent.replace(/\s+/g,'').includes(word));
     el.querySelector('[data-pv]').onclick=()=>{ const a=pageBtn('이전문항'); const u=a&&navUrl(a); if(u) go(u); else el.querySelector('[data-t]').textContent='이 화면에는 이전 문항 버튼이 없습니다.'; };
     el.querySelector('[data-nx]').onclick=()=>{ const a=pageBtn('다음문항'); const u=a&&navUrl(a); if(u) go(u); else el.querySelector('[data-t]').textContent='이 화면에는 다음 문항 버튼이 없습니다.'; };
