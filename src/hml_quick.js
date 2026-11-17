@@ -45,7 +45,7 @@
     el.innerHTML='<div data-grip title="끌어서 폭 조절" style="position:absolute;left:-4px;top:0;bottom:0;width:8px;cursor:col-resize"></div>'+
       '<div data-tab style="display:none;writing-mode:vertical-rl;padding:12px 6px;cursor:pointer;font-weight:bold;color:#1a73e8">◀ 바로 검사 펼치기</div>'+
       '<div data-head style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;border-bottom:1px solid #ddd;background:#f4f5f7"><b>바로 검사</b><span style="font-size:11px;color:#999">'+esc(window.__hmlBuild||'')+'</span><span style="flex:1"></span>'+
-      '<button data-pv>◀ 이전</button><button data-nx>다음 ▶</button><button data-r style="border:0;padding:4px 10px;border-radius:4px;color:#fff;background:#1a73e8;cursor:pointer">↻ 다시 비교</button><button data-hwp title="이 화면의 [한글 편집기 열기]를 대신 누름(한글(HML) 수정 탭으로 자동 이동)" style="border:0;padding:4px 10px;border-radius:4px;color:#fff;background:#0b57d0;cursor:pointer">한글 편집기</button><button data-apply title="이 화면의 [전체 반영]을 대신 누름" style="border:0;padding:4px 10px;border-radius:4px;color:#fff;background:#188038;cursor:pointer">전체 반영</button><button data-up title="새 버전이 있는지 확인">업데이트 확인</button><button data-f title="접기">▶ 접기</button><button data-x>닫기</button>'+
+      '<button data-pv>◀ 이전</button><button data-nx>다음 ▶</button><button data-r style="border:0;padding:4px 10px;border-radius:4px;color:#fff;background:#1a73e8;cursor:pointer">↻ 다시 비교</button><button data-hwp title="이 화면의 [한글 편집기 열기]를 대신 누름(한글(HML) 수정 탭으로 자동 이동)" style="border:0;padding:4px 10px;border-radius:4px;color:#fff;background:#0b57d0;cursor:pointer">한글 편집기</button><button data-resave title="한글 편집기에서 지문·문제·해답을 열고 저장(수식 겹침 해결, 글자 ∽는 수식으로). 끝나면 [전체 반영]을 누르세요" style="border:0;padding:4px 10px;border-radius:4px;color:#fff;background:#7b1fa2;cursor:pointer">한글 다시 저장</button><button data-apply title="이 화면의 [전체 반영]을 대신 누름" style="border:0;padding:4px 10px;border-radius:4px;color:#fff;background:#188038;cursor:pointer">전체 반영</button><button data-up title="새 버전이 있는지 확인">업데이트 확인</button><button data-f title="접기">▶ 접기</button><button data-x>닫기</button>'+
       '<div data-t style="flex-basis:100%;font-size:12px;color:#666"></div></div><div data-b style="overflow:auto;padding:12px;flex:1"></div>';
     el.querySelector('[data-r]').onclick=()=>{ K.fresh=true; run(); };
     const up=el.querySelector('[data-up]'); if(!window.__hmlQuickUpdate) up.style.display='none';
@@ -60,6 +60,7 @@
       if(!b){ const tab=visBtn(/^한글\(HML\)수정$/); if(!tab){ note('이 화면에는 한글 편집기 버튼이 없습니다(문항 수정 화면에서 쓰세요).'); return; } tab.click();
         for(let i=0;i<20&&!b;i++){ await new Promise(r=>setTimeout(r,150)); b=visBtn(/^한글편집기열기$/); } }
       if(b){ b.click(); note('한글 편집기를 열었습니다. 편집기에서 저장한 뒤 [전체 반영]을 누르세요.'); } else note('한글 편집기 버튼을 찾지 못했습니다.'); };
+    el.querySelector('[data-resave]').onclick=()=>{ const C=window.__hmlResaveCore; if(!C){ note('다시 저장 기능을 불러오지 못했습니다. 업데이트 확인을 눌러 보세요.'); return; } C.start(t=>note(t)); };
     el.querySelector('[data-apply]').onclick=()=>{ const b=visBtn(/^전체반영$/); if(!b){ note('이 화면에는 전체 반영 버튼이 없습니다.'); return; }
       b.click(); note('[전체 반영]을 눌렀습니다. 반영이 끝나면 ↻ 다시 비교를 누르세요.'); };
     const pageBtn=word=>[...document.querySelectorAll('a,button')].find(a=>!el.contains(a)&&a.textContent.replace(/\s+/g,'').includes(word));
