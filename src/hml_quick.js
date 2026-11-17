@@ -86,6 +86,7 @@
       const mine=r.rows.filter(x=>x.kind!=='내용'||!/^(원본 대조 불가|문항 수 불일치)$/.test(x.type)).map(x=>[x.n,x.itemId,x.kind,x.type,x.detail]);
       const sheetNotes=r.rows.filter(x=>/^(원본 대조 불가|문항 수 불일치)$/.test(x.type)).map(x=>['','',x.kind,x.type,x.detail]);
       const data=r.data, n=r.n;
+      K.last={id:String(id),sid:String(sid),n,data,rows:mine,at:Date.now()};   // AI 눈검수(ver3)가 읽음
       if(!document.getElementById('hmlMarkCssTag')&&window.__hmlMarkCss){ const st=document.createElement('style'); st.id='hmlMarkCssTag'; st.textContent=window.__hmlMarkCss; document.head.appendChild(st); }
       const sec=(Date.now()-t0)/1000;
       t.textContent='시험지 '+sid+' · #'+(n||'?')+' · 문항ID '+id+' · '+new Date().toTimeString().slice(0,5)+' 비교('+sec.toFixed(0)+'초)';
