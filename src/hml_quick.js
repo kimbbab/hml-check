@@ -45,9 +45,13 @@
     el.innerHTML='<div data-grip title="끌어서 폭 조절" style="position:absolute;left:-4px;top:0;bottom:0;width:8px;cursor:col-resize"></div>'+
       '<div data-tab style="display:none;writing-mode:vertical-rl;padding:12px 6px;cursor:pointer;font-weight:bold;color:#1a73e8">◀ 바로 검사 펼치기</div>'+
       '<div data-head style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;border-bottom:1px solid #ddd;background:#f4f5f7"><b>바로 검사</b><span style="font-size:11px;color:#999">'+esc(window.__hmlBuild||'')+'</span><span style="flex:1"></span>'+
-      '<button data-pv>◀ 이전</button><button data-nx>다음 ▶</button><button data-r style="border:0;padding:4px 10px;border-radius:4px;color:#fff;background:#1a73e8;cursor:pointer">↻ 다시 비교</button><button data-f title="접기">▶ 접기</button><button data-x>닫기</button>'+
+      '<button data-pv>◀ 이전</button><button data-nx>다음 ▶</button><button data-r style="border:0;padding:4px 10px;border-radius:4px;color:#fff;background:#1a73e8;cursor:pointer">↻ 다시 비교</button><button data-up title="새 버전이 있는지 확인">업데이트 확인</button><button data-f title="접기">▶ 접기</button><button data-x>닫기</button>'+
       '<div data-t style="flex-basis:100%;font-size:12px;color:#666"></div></div><div data-b style="overflow:auto;padding:12px;flex:1"></div>';
     el.querySelector('[data-r]').onclick=()=>{ K.fresh=true; run(); };
+    const up=el.querySelector('[data-up]'); if(!window.__hmlQuickUpdate) up.style.display='none';
+    up.onclick=async()=>{ const t=el.querySelector('[data-t]'); up.disabled=true; t.textContent='새 버전을 확인하는 중…';
+      try{ const r=await window.__hmlQuickUpdate(); if(r.updated){ t.textContent='새 버전('+r.build+')을 받았습니다. 페이지를 새로 고침하면 적용됩니다.'; if(confirm('새 버전('+r.build+')을 받았습니다. 지금 새로 고칠까요?')) location.reload(); } else t.textContent='이미 최신 버전입니다('+r.build+').'; }
+      catch(e){ t.textContent='확인하지 못했습니다: '+e.message; } finally{ up.disabled=false; } };
     const pageBtn=word=>[...document.querySelectorAll('a,button')].find(a=>!el.contains(a)&&a.textContent.replace(/\s+/g,'').includes(word));
     el.querySelector('[data-pv]').onclick=()=>{ const a=pageBtn('이전문항'); const u=a&&navUrl(a); if(u) go(u); else el.querySelector('[data-t]').textContent='이 화면에는 이전 문항 버튼이 없습니다.'; };
     el.querySelector('[data-nx]').onclick=()=>{ const a=pageBtn('다음문항'); const u=a&&navUrl(a); if(u) go(u); else el.querySelector('[data-t]').textContent='이 화면에는 다음 문항 버튼이 없습니다.'; };

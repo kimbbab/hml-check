@@ -1,5 +1,5 @@
-/* HML 수정 도우미 2026-11-17 10:09 */
-(function(){window.__hmlBuild='2026-11-17 10:09';document.documentElement.setAttribute('data-hml-quick','2026-11-17 10:09');
+/* HML 수정 도우미 2026-11-17 10:18 */
+(function(){window.__hmlBuild='2026-11-17 10:18';document.documentElement.setAttribute('data-hml-quick','2026-11-17 10:18');
 (() => {
   const Q = String.fromCharCode(63);
   const NARROW = 360;           // 좁은 화면 점검 폭(px)
