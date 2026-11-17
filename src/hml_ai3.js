@@ -69,7 +69,7 @@
     const tag=(t,c)=>'<span style="display:inline-block;padding:0 6px;border-radius:4px;color:#fff;font-size:12px;margin-right:6px;background:'+c+'">'+esc(t)+'</span>';
     if(!ix){ P.innerHTML='<b>미리 돌린 눈검수</b> <button data-con>HML_DOWNLOAD 폴더 연결</button> <span style="color:#666">처음 한 번만 고르면 문항마다 결과가 자동으로 나옵니다.</span>'; P.querySelector('[data-con]').onclick=()=>connect(true); return; }
     const e=ix.idx[String(id)]; const when=new Date(ix.made||ix.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
-    let h='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b>미리 돌린 눈검수</b><span style="font-size:11px;color:#888">'+esc(when)+' 기준 · '+ix.n+'문항</span><span style="flex:1"></span><button data-re title="HML_DOWNLOAD 폴더를 다시 읽음(합치기 뒤에 누르세요)">새로 읽기</button></div>';
+    let h='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b>미리 돌린 눈검수</b><span style="font-size:11px;color:#888">'+esc(when)+' 기준 · '+ix.n+'문항</span><span style="flex:1"></span><button data-re title="HML_DOWNLOAD 폴더를 다시 읽음(합치기 뒤에 누르세요)">새로 읽기</button><button data-ch title="눈검수 결과가 있는 다른 폴더 고르기">폴더 바꾸기</button></div>';
     if(!e) h+='<div style="margin-top:4px;color:#666">이 문항은 미리 돌린 결과가 없습니다(검수 대상 아님 또는 걸린 것 없음). 필요하면 아래 <b>이 문항 AI 검사</b>를 누르세요.</div>';
     else{ const lines=[]; let k=0; const vs=(e.vision&&e.vision.verdicts)||[];
       for(const x of (e.queue||[])){ if(x[2]==='화면') lines.push(tag('화면','#1a73e8')+esc(x[3])); else if(x[2]==='AI') lines.push(tag('AI 추가','#d93025')+esc(x[4]));
@@ -83,7 +83,7 @@
       h+=lines.length?'<ul style="margin:4px 0;padding-left:18px">'+lines.map(l=>'<li style="margin:2px 0">'+l+'</li>').join('')+'</ul>':'';
       if(!real) h+='<div style="margin-top:4px;padding:4px 8px;border-radius:4px;background:#e6f4ea;color:#188038;font-weight:bold">✓ 미리 검수: 고칠 내용 없음'+(e.queue?'':' (표기 차이뿐)')+'</div>';
       h+='<div style="font-size:11px;color:#888;margin-top:2px">미리 검수한 때의 결과입니다. 그 뒤 고쳤다면 바로 검사(아래) 결과가 최신입니다.</div>'; }
-    P.innerHTML=h; const re=P.querySelector('[data-re]'); if(re) re.onclick=()=>connect(false); }
+    P.innerHTML=h; const re=P.querySelector('[data-re]'); if(re) re.onclick=()=>connect(false); const ch=P.querySelector('[data-ch]'); if(ch) ch.onclick=()=>connect(true); }
 
   // ---------- 칸 그리기 ----------
   const opt=()=>({model:LS('hmlAi3Model')||'claude-haiku-5-5',solve:LS('hmlAi3Solve')!=='0',meta:LS('hmlAi3Meta')!=='0',auto:LS('hmlAi3Auto')==='1'});
