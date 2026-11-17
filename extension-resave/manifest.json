@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "HML 다시 저장",
+  "version": "1.0",
+  "description": "문제은행 CMS 문항 수정 화면에 [한글 다시 저장] 버튼을 넣습니다. 한글 편집기에서 지문·문제·해답을 열고 저장해 수식 겹침을 고칩니다. [전체 반영]은 직접 누릅니다.",
+  "content_scripts": [
+    { "matches": ["https://itemcms.dongahub.com/item/all/*"], "js": ["loader.js"], "run_at": "document_idle", "world": "MAIN" }
+  ]
+}
