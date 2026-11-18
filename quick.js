@@ -1,5 +1,5 @@
-/* HML 바로 검사 2026-11-18 08:59 */
-(function(){window.__hmlBuild='2026-11-18 08:59';document.documentElement.setAttribute('data-hml-quick','2026-11-18 08:59');
+/* HML 바로 검사 2026-11-18 09:03 */
+(function(){window.__hmlBuild='2026-11-18 09:03';document.documentElement.setAttribute('data-hml-quick','2026-11-18 09:03');
 (() => {
   const Q = String.fromCharCode(63);
   const NARROW = 360;           // 좁은 화면 점검 폭(px)
@@ -620,15 +620,12 @@ window.__hmlResaveEmbed=0;
           :'<div style="padding:8px;border-radius:4px;background:#e6f4ea;color:#188038;font-weight:bold">✓ HML 원본과 차이 없음</div>')+
         (sheetNotes.length?'<div style="margin-top:8px;font-size:12px;color:#b06000">시험지 전체 알림: '+sheetNotes.map(x=>esc(x[3]+' '+x[4])).join(' / ')+'</div>':'')+
         '<div style="font-size:12px;color:#666;margin:10px 0 4px">CMS에 <b>저장된</b> 내용 기준입니다. 고친 뒤 저장하고 ↻ 다시 비교를 누르세요. 빨간 동그라미: 원본과 다른 글자 · 빨간 테두리: 화면 문제 · 주황 점선: 모바일 넘침</div>'+
-        '<div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap"><div style="flex:0 1 640px;min-width:0"><b>HTML</b><div data-hbox style="overflow:hidden;margin-top:4px"><div data-h style="width:640px;box-sizing:border-box;padding:16px;border:1px solid #ddd"></div></div></div>'+
+        '<div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap"><div style="flex:0 1 640px;min-width:0"><b>HTML</b><div data-h style="width:100%;max-width:640px;box-sizing:border-box;padding:16px;border:1px solid #ddd;margin-top:4px;overflow-x:auto"></div></div>'+
         '<div style="flex:1;min-width:240px"><b>HML 캡처(문제)</b><img style="max-width:100%;display:block;border:1px solid #ddd;margin:4px 0 10px" src="'+CAP(id)+'_Q.png"><b>HML 캡처(해답)</b><img style="max-width:100%;display:block;border:1px solid #ddd;margin:4px 0" src="'+CAP(id)+'_A.png"></div></div>';
       const h=body.querySelector('[data-h]');
       if(data){ const q=document.createElement('div'); q.className='qv-item'; q.dataset.qvLayout='card'; h.appendChild(q);
         try{ window.renderQuestionView(q,data,'card'); if(window.__hmlMark) window.__hmlMark(q,mine); if(window.__hmlMarkLayout) await window.__hmlMarkLayout(q,mine); }catch(e){ h.textContent='HTML을 그리지 못했습니다: '+e.message; } }
       else h.textContent='시험지 화면에서 이 문항 카드를 찾지 못했습니다.';
-      // 옆 칸 폭이 640px보다 좁으면 HTML을 통째로 줄여 보여 줌(줄바꿈은 실제 640px 카드 그대로, 그림·수식·표 같이 줄어듦)
-      const hb=body.querySelector('[data-hbox]'); const fit=()=>{ const w=hb.clientWidth; h.style.zoom=(w&&w<640)?String(w/640):''; };
-      if(K.fitRO) K.fitRO.disconnect(); if(window.ResizeObserver){ K.fitRO=new ResizeObserver(fit); K.fitRO.observe(hb); } fit();
     }catch(e){ body.textContent='검사하지 못했습니다: '+e.message; }
     finally{ K.busy=false; } }
   // 이전/다음 문항: 패널이 열려 있으면 페이지를 새로 열지 않고 내용만 바꿔서 넘김(즐겨찾기가 꺼지지 않게)
