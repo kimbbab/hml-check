@@ -102,6 +102,29 @@
     if(!ix){ P.innerHTML='<b>미리 돌린 눈검수</b> <button data-con>HML_DOWNLOAD 폴더 연결</button> <span style="color:#666">처음 한 번만 고르면 문항마다 결과가 자동으로 나옵니다.</span>'; P.querySelector('[data-con]').onclick=()=>connect(true); return; }
     const M=ix.must, mustOnly=!!(M&&M.length)&&LS('hmlAi3MustOnly')!=='0';
     const e=ix.idx[String(id)]; const when=new Date(ix.made||ix.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    const setEl=b.querySelector('[data-preset]');
+    const reBtns='<button data-re title="HML_DOWNLOAD 폴더를 다시 읽음(합치기·수정본 만든 뒤에 누르세요)">새로 읽기</button> <button data-ch title="결과가 있는 다른 폴더 고르기">폴더 바꾸기</button> <span style="font-size:11px;color:#888">'+esc(when)+' 기준 · '+ix.n+'문항</span>';
+    const bindRe=()=>{ b.querySelectorAll('[data-re]').forEach(x=>x.onclick=()=>connect(false)); b.querySelectorAll('[data-ch]').forEach(x=>x.onclick=()=>connect(true)); };
+    if(mustOnly){ const d=doneMap(), i=M.findIndex(m=>m.id===String(id)), dn=M.filter(m=>d[m.id]).length, cur=i>=0?M[i]:null;
+      const bt=(k,t,ti,st)=>'<button data-mu="'+k+'" title="'+esc(ti||'')+'"'+(st?' style="'+st+'"':'')+'>'+t+'</button>';
+      let c='<div style="padding:6px 8px;border-radius:6px;background:#fff;border:2px solid '+(cur&&!d[cur.id]?'#d93025':'#188038')+'">'+
+        '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="color:#d93025">꼭 수정</b><span><b>'+(i>=0?(i+1):'–')+'</b> / '+M.length+'</span><span style="color:#188038;font-size:12px">완료 '+dn+'</span><span style="flex:1"></span>'+
+        bt('prev','◀','목록의 이전 문항')+bt('next','▶','목록의 다음 문항')+
+        (cur?bt('done',d[cur.id]?'완료 취소':'✓ 완료','다 고쳤으면 누르세요(이 브라우저에만 저장)',d[cur.id]?'':'background:#188038;color:#fff;border:0;border-radius:4px;padding:2px 8px;font-weight:bold'):bt('first','안 끝난 문항으로','목록에서 아직 안 끝난 첫 문항'))+'</div>';
+      if(!cur) c+='<div style="font-size:12px;color:#888;margin-top:2px">이 문항은 꼭 수정 목록에 없습니다(고칠 것 없음).</div>';
+      else{ c+='<div style="font-size:12px;color:#666;margin-top:2px">'+esc(cur.sname)+' · #'+esc(cur.no)+' · 시트 No '+esc(cur.row||'')+(d[cur.id]?' · <b style="color:#188038">✓ 완료</b>':'')+'</div>';
+        const lines=((e&&e.must)||[]).map(x=>{ const t=String(x[3]||''), dd=String(x[4]||'');
+          if(/확인 필요/.test(t+dd)) return tag('확인','#e37400')+esc(dd);
+          if(/정답 의심|정답 차이/.test(t+dd)) return tag('정답','#d93025')+esc(x[2]==='AI'?dd:t+': '+dd);
+          if(x[2]==='AI') return tag('눈검수','#7b1fa2')+esc(dd);
+          const v=(x[5]&&typeof x[5]==='object')?x[5]:null; return tag('내용','#d93025')+esc(t)+(v&&v.reason?' <span style="color:#666">'+esc(v.reason)+'</span>':'')+'<div style="font-family:monospace;font-size:11px;color:#555;white-space:pre-wrap">'+esc(dd.slice(0,300))+'</div>'; });
+        if(lines.length) c+='<ul style="margin:4px 0;padding-left:18px">'+lines.map(l=>'<li style="margin:2px 0">'+l+'</li>').join('')+'</ul>';
+        c+=e&&e.fix?fixBlock(e,id,true):'<div style="font-size:12px;color:#888;border-top:1px dashed #ddd;padding-top:3px">수정안 없음 → 직접 고치세요</div>'; }
+      if(ix.mustMissing) c+='<div style="font-size:11px;color:#aaa">아직 검사 안 된 시험지 '+esc(ix.mustMissing)+'개는 목록에 없음</div>';
+      P.innerHTML=c+'</div>';
+      if(setEl) setEl.innerHTML='<div style="margin:4px 0">'+reBtns+'</div><label title="완료한 문항은 ◀ ▶에서 건너뜀"><input type="checkbox" data-muhide'+(LS('hmlAi3MustHide')!=='0'?' checked':'')+'> 완료 건너뛰기</label> <label title="끄면 미리 돌린 결과를 모두 보여 줌"><input type="checkbox" data-muonly checked> 꼭 수정만 보기</label>';
+      bindMust(b,ix,id); bindFix(P,e,id); bindRe(); return; }
+    if(setEl) setEl.innerHTML=M&&M.length?'<label><input type="checkbox" data-muonly> 꼭 수정만 보기</label>':'';
     let h='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b>미리 돌린 눈검수</b><span style="font-size:11px;color:#888">'+esc(when)+' 기준 · '+ix.n+'문항</span><span style="flex:1"></span><button data-re title="HML_DOWNLOAD 폴더를 다시 읽음(합치기 뒤에 누르세요)">새로 읽기</button><button data-ch title="눈검수 결과가 있는 다른 폴더 고르기">폴더 바꾸기</button></div>';
     if(M&&M.length) h=mustBar(ix,id)+h;
     if(e&&e.fix) h=fixBlock(e,id)+h;
@@ -112,7 +135,7 @@
         if(x[2]==='AI') return tag('AI 눈검수','#7b1fa2')+esc(d);
         const v=(x[5]&&typeof x[5]==='object')?x[5]:null; return tag(v?'고칠 것':'눈 판정 전',v?'#d93025':'#e37400')+esc(t)+(v&&v.reason?' <span style="color:#666">'+esc(v.reason)+'</span>':'')+'<div style="font-family:monospace;font-size:11px;color:#555;white-space:pre-wrap">'+esc(d.slice(0,300))+'</div>'; });
       h+='<div style="margin-top:4px;color:#555;font-size:12px">시험지 '+esc(e.sid)+(e.sname?' '+esc(e.sname):'')+' · #'+esc(e.no)+'</div><ul style="margin:4px 0;padding-left:18px">'+lines.map(l=>'<li style="margin:2px 0">'+l+'</li>').join('')+'</ul>'; }
-    else if(!e) h+='<div style="margin-top:4px;color:#666">이 문항은 미리 돌린 결과가 없습니다(검수 대상 아님 또는 걸린 것 없음). 필요하면 아래 <b>이 문항 AI 검사</b>를 누르세요.</div>';
+    else if(!e) h+='<div style="margin-top:4px;color:#666">이 문항은 미리 돌린 결과가 없습니다(검수 대상 아님 또는 걸린 것 없음). 필요하면 <b>AI 다시 검사</b>를 누르세요.</div>';
     else{ const lines=[]; let k=0; const vs=(e.vision&&e.vision.verdicts)||[];
       for(const x of (e.queue||[])){ if(x[2]==='화면') lines.push(tag('화면','#1a73e8')+esc(x[3])); else if(x[2]==='AI') lines.push(tag('AI 추가','#d93025')+esc(x[4]));
         else if(x[2]==='내용'){ k++; const v=(x[5]&&typeof x[5]==='object')?x[5]:null; lines.push(tag(v?(v.real?'고칠 것':'표기만 다름'):'눈 판정 전',v?(v.real?'#d93025':'#5f6368'):'#e37400')+esc(x[3])+(v&&v.reason?' <span style="color:#666">'+esc(v.reason)+'</span>':'')+'<div style="font-family:monospace;font-size:11px;color:#555;white-space:pre-wrap">'+esc(String(x[4]||'').slice(0,300))+'</div>'); } }
@@ -125,7 +148,7 @@
       h+=lines.length?'<ul style="margin:4px 0;padding-left:18px">'+lines.map(l=>'<li style="margin:2px 0">'+l+'</li>').join('')+'</ul>':'';
       if(!real) h+='<div style="margin-top:4px;padding:4px 8px;border-radius:4px;background:#e6f4ea;color:#188038;font-weight:bold">✓ 미리 검수: 고칠 내용 없음'+(e.queue?'':' (표기 차이뿐)')+'</div>';
       h+='<div style="font-size:11px;color:#888;margin-top:2px">미리 검수한 때의 결과입니다. 그 뒤 고쳤다면 바로 검사(아래) 결과가 최신입니다.</div>'; }
-    P.innerHTML=h; bindMust(P,ix,id); bindFix(P,e,id); const re=P.querySelector('[data-re]'); if(re) re.onclick=()=>connect(false); const ch=P.querySelector('[data-ch]'); if(ch) ch.onclick=()=>connect(true); }
+    P.innerHTML=h; bindMust(b,ix,id); bindFix(P,e,id); const re=P.querySelector('[data-re]'); if(re) re.onclick=()=>connect(false); const ch=P.querySelector('[data-ch]'); if(ch) ch.onclick=()=>connect(true); }
 
   // ---------- AI 수정본 붙여넣기(수정본.json): 꼭 수정 문항의 HTML 수정안을 보여 주고, 수정 화면에 붙여넣고, 전체 반영 ----------
   // 수정 화면은 문항 문서를 <script type="application/json">에 담아 두고 [HTML 수정] 탭을 열 때 편집기를 만든다.
@@ -196,11 +219,11 @@
     for(let k=i+1;k<M.length;k++) if(!d[M[k].id]&&!(LS('hmlAi3FixSkipNoFix')==='1'&&!(ix.idx[M[k].id]||{}).fix)){ nx=M[k]; break; }
     if(nx&&LS('hmlAi3FixAutoNext')!=='0'){ location.href='/item/all/modify.donga'+Q+'itemId='+nx.id; return true; }
     return false; }
-  function fixBlock(e,id){ const f=e&&e.fix; if(!f) return '';
-    const L=FX.log()[id]||{}, ok=f.state==='준비'&&f.edits&&f.edits.length;
+  function fixBlock(e,id,inner){ const f=e&&e.fix; if(!f) return '';
+    const L=FX.log()[id]||{}, ok=/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length;
     const st=L.st?'<span style="color:'+(/반영$/.test(L.st)?'#188038':'#b06000')+';font-weight:bold"> · '+esc(L.st)+'</span>':'';
-    let h='<div style="margin:6px 0;padding:6px 8px;border-radius:6px;background:#fff;border:2px solid #188038"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="color:#188038">수정안</b>'+(f.approved?'<span style="font-size:12px;color:#188038">승인본</span>':'<span style="font-size:12px;color:#888">검토 전</span>')+st+
-      (f.hml_also?'<span style="color:#b06000;font-size:12px">HML·OMR도 직접 수정</span>':'')+'<span style="flex:1"></span>'+
+    let h='<div style="'+(inner?'border-top:1px dashed #bbb;margin-top:4px;padding-top:4px':'margin:6px 0;padding:6px 8px;border-radius:6px;background:#fff;border:2px solid #188038')+'"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="color:#188038">수정안</b>'+(f.approved?'<span style="font-size:12px;color:#188038">승인본</span>':'<span style="font-size:12px;color:#888">검토 전</span>')+st+
+      (f.state==='AI 아직'&&ok?'<span style="color:#b06000;font-size:12px">규칙 수정만(나머지 지적은 직접)</span>':'')+(f.hml_also?'<span style="color:#b06000;font-size:12px">HML·OMR도 직접 수정</span>':'')+'<span style="flex:1"></span>'+
       (ok?'<button data-fx="paste" style="background:#188038;color:#fff;border:0;border-radius:4px;padding:3px 10px;font-weight:bold">붙여넣기</button><button data-fx="apply" style="background:#1a73e8;color:#fff;border:0;border-radius:4px;padding:3px 10px;font-weight:bold" title="CMS [전체 반영] → 확인 → 완료 표시 → 다음 문항">반영</button>':'')+
       (L.before?'<button data-fx="undo" title="바꾸기 전 글로 다시 붙여넣기">되돌리기</button>':'')+'</div>';
     if(!ok) h+='<div style="font-size:12px;color:#b06000">'+esc(f.state)+(f.note?' · '+esc(f.note):'')+' (수정안 없음 → 직접 고치세요)</div>';
@@ -237,14 +260,13 @@
   function box(){ const p=panelEl(); if(!p) return null; let b=p.querySelector('[data-ai3]'); if(b) return b;
     const body=p.querySelector('[data-b]'); if(!body) return null; const o=opt();
     b=document.createElement('div'); b.setAttribute('data-ai3','');
-    b.style.cssText='border-bottom:1px solid #ddd;background:#f8f3fb;padding:8px 10px;font-size:13px;max-height:45%;overflow:auto;flex:none';
-    b.innerHTML='<div data-pre style="margin-bottom:6px;padding-bottom:6px;border-bottom:1px dashed #d7c4e4"></div>'+
-      '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"><b style="color:#7b1fa2">AI 바로 검사</b>'+
-      '<button data-go style="border:0;padding:4px 10px;border-radius:4px;color:#fff;background:#7b1fa2;cursor:pointer;font-weight:bold">이 문항 AI 검사</button>'+
-      '<select data-model title="모델"><option value="claude-haiku-5-5">Haiku 5.5 (빠름·저렴)</option><option value="claude-sonnet-5-5">Sonnet 5.5 (정확)</option></select>'+
-      '<label><input type="checkbox" data-solve> 문제풀이</label><label><input type="checkbox" data-meta> 메타정보</label><label title="문항을 넘길 때마다 자동으로 AI 검사(문항마다 비용이 듭니다)"><input type="checkbox" data-auto> 넘길 때 자동</label>'+
-      '<span style="flex:1"></span><button data-key title="API 키 넣기·바꾸기">API 키</button></div>'+
-      '<div data-out style="margin-top:6px;color:#666">버튼을 누르면 HML 캡처와 HTML을 AI가 비교합니다.</div>';
+    b.style.cssText='border-bottom:1px solid #ddd;background:#f8f3fb;padding:6px 10px;font-size:13px;max-height:55%;overflow:auto;flex:none;position:relative';
+    b.innerHTML='<div data-pre></div>'+
+      '<style>[data-ai3] details[open]{flex-basis:100%}[data-ai3] details summary{text-align:right}</style><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px"><button data-go title="HML 캡처와 HTML을 AI가 다시 비교(API 비용)" style="border:0;padding:3px 10px;border-radius:4px;color:#fff;background:#7b1fa2;cursor:pointer">AI 다시 검사</button><span style="flex:1"></span>'+
+      '<details style="font-size:12px;margin-left:auto"><summary style="cursor:pointer;color:#666">설정</summary><div style="background:#fff;border:1px solid #ccc;border-radius:6px;padding:6px 8px;margin-top:4px"><div data-preset></div>'+
+      '<div style="margin-top:4px;border-top:1px dashed #ddd;padding-top:4px"><b>AI 검사</b> <select data-model title="모델"><option value="claude-haiku-5-5">Haiku 5.5 (빠름·저렴)</option><option value="claude-sonnet-5-5">Sonnet 5.5 (정확)</option></select> '+
+      '<label><input type="checkbox" data-solve> 문제풀이</label> <label><input type="checkbox" data-meta> 메타정보</label> <label title="문항을 넘길 때마다 자동으로 AI 검사(문항마다 비용이 듭니다)"><input type="checkbox" data-auto> 넘길 때 자동</label> <button data-key title="API 키 넣기·바꾸기">API 키</button></div></div></details></div>'+
+      '<div data-out style="margin-top:4px;color:#666"></div>';
     p.insertBefore(b,body);
     const $=q=>b.querySelector(q);
     $('[data-model]').value=o.model; $('[data-solve]').checked=o.solve; $('[data-meta]').checked=o.meta; $('[data-auto]').checked=o.auto;
@@ -289,7 +311,7 @@
   // ---------- 바로 검사 칸이 생기거나 문항이 바뀌면 붙이기 ----------
   let lastId=null, tm=null;
   function tick(){ if(!box()) return; const id=itemIdOf(); if(K().busy) return;
-    if(id!==lastId){ lastId=id; showPre(id).catch(()=>{}); if(A.cache[id]) render(id,A.cache[id]); else if(opt().auto) run(); else out('미리 돌린 결과가 없거나, 고친 뒤 다시 확인할 때 <b>이 문항 AI 검사</b>를 누르세요.'); } }
+    if(id!==lastId){ lastId=id; showPre(id).catch(()=>{}); if(A.cache[id]) render(id,A.cache[id]); else if(opt().auto) run(); else out(''); } }
   if(!A.obs){ A.obs=new MutationObserver(()=>{ clearTimeout(tm); tm=setTimeout(tick,600); });   A.obs.observe(document.body,{childList:true,subtree:true}); }
   if(!A.pendChecked){ A.pendChecked=true; loadPre().then(ix=>checkPending(ix)).catch(()=>{}); }
   tick();
