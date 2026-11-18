@@ -197,10 +197,10 @@
     if(nx&&LS('hmlAi3FixAutoNext')!=='0'){ location.href='/item/all/modify.donga'+Q+'itemId='+nx.id; return true; }
     return false; }
   function fixBlock(e,id){ const f=e&&e.fix; if(!f) return '';
-    const L=FX.log()[id]||{}, ok=f.state==='준비'&&f.edits&&f.edits.length;
+    const L=FX.log()[id]||{}, ok=/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length;
     const st=L.st?'<span style="color:'+(/반영$/.test(L.st)?'#188038':'#b06000')+';font-weight:bold"> · '+esc(L.st)+'</span>':'';
     let h='<div style="margin:6px 0;padding:6px 8px;border-radius:6px;background:#fff;border:2px solid #188038"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="color:#188038">수정안</b>'+(f.approved?'<span style="font-size:12px;color:#188038">승인본</span>':'<span style="font-size:12px;color:#888">검토 전</span>')+st+
-      (f.hml_also?'<span style="color:#b06000;font-size:12px">HML·OMR도 직접 수정</span>':'')+'<span style="flex:1"></span>'+
+      (f.state==='AI 아직'&&ok?'<span style="color:#b06000;font-size:12px">규칙 수정만(나머지 지적은 직접)</span>':'')+(f.hml_also?'<span style="color:#b06000;font-size:12px">HML·OMR도 직접 수정</span>':'')+'<span style="flex:1"></span>'+
       (ok?'<button data-fx="paste" style="background:#188038;color:#fff;border:0;border-radius:4px;padding:3px 10px;font-weight:bold">붙여넣기</button><button data-fx="apply" style="background:#1a73e8;color:#fff;border:0;border-radius:4px;padding:3px 10px;font-weight:bold" title="CMS [전체 반영] → 확인 → 완료 표시 → 다음 문항">반영</button>':'')+
       (L.before?'<button data-fx="undo" title="바꾸기 전 글로 다시 붙여넣기">되돌리기</button>':'')+'</div>';
     if(!ok) h+='<div style="font-size:12px;color:#b06000">'+esc(f.state)+(f.note?' · '+esc(f.note):'')+' (수정안 없음 → 직접 고치세요)</div>';
