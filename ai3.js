@@ -1,5 +1,5 @@
-/* HML AI 눈검수 2026-11-17 10:34 */
-window.__hmlAi3Build='2026-11-17 10:34';
+/* HML AI 눈검수 2026-11-18 19:36 */
+window.__hmlAi3Build='2026-11-18 19:36';
 // AI 눈검수(ver3): 바로 검사(ver2) 옆 칸에 'AI 눈검수' 칸을 붙임.
 // 버튼을 누르면 이 문항의 HML 캡처(문제·해답)와 HTML 내용을 AI(기본 Claude Haiku 5.5)에 보내 비교하고, 원하면 문제풀이·메타정보도 판단함.
 // API 키와 캡처 이미지는 확장(배경)에서만 다룸: 이 페이지 코드는 키를 볼 수 없음. CMS는 읽기만 함.
@@ -51,6 +51,10 @@ window.__hmlAi3Build='2026-11-17 10:34';
   async function buildIndex(root,msg){ const idx={}; const at=id=>idx[id]=idx[id]||{};
     const j=await readJson(root,'수정목록.json');
     if(j) for(const q of (j.queue||[])){ const id=q.itemId||((q.iss||[]).find(x=>x[1])||[])[1]; if(!id) continue; Object.assign(at(String(id)),{sid:q.sid,no:q.no,sname:q.sname,queue:q.iss||[]}); }
+    // 검수자용 '꼭 수정 목록'(검수자목록.py가 만든 파일). 이 파일 하나만 있는 폴더를 골라도 됨
+    const w=await readJson(root,'검수자목록.json'); let must=null;
+    if(w&&Array.isArray(w.items)){ must=[]; for(const q of w.items){ if(!q.itemId) continue; const e=at(String(q.itemId)); e.sid=e.sid||q.sid; e.no=e.no||q.no; e.sname=e.sname||q.sname; e.must=q.iss||[]; e.tags=q.tags||[];
+        must.push({id:String(q.itemId),sid:q.sid,no:q.no,sname:q.sname,row:q.row,tags:q.tags||[]}); } }
     const dirs=[]; for await (const [name,h] of root.entries()) if(h.kind==='directory'&&/^\d+_/.test(name)) dirs.push([name,h]);
     let k=0, n=0; const one=async()=>{ while(k<dirs.length){ const [name,h]=dirs[k++]; n++; if(msg&&n%20===0) msg('폴더 읽는 중… '+n+'/'+dirs.length);
         const sid=name.split('_')[0]; const ai=await readJson(h,'ai.json'), me=await readJson(h,'메타점검.json');
@@ -58,21 +62,54 @@ window.__hmlAi3Build='2026-11-17 10:34';
           if(it.vision) e.vision=it.vision; if(Array.isArray(it.problem)&&it.problem.length) e.problem=it.problem; if(ai.model) e.model=ai.model; }
         for(const [no,it] of Object.entries((me&&me.items)||{})){ if(!it||!it.itemId||!(it.issues||[]).length) continue; const e=at(String(it.itemId)); e.sid=e.sid||sid; e.no=e.no||no; e.meta=it.issues; } } };
     await Promise.all(Array.from({length:8},one));
-    return {at:Date.now(),made:j&&j.made,sheets:dirs.length,n:Object.keys(idx).length,idx}; }
+    return {at:Date.now(),made:(j&&j.made)||(w&&w.made),sheets:dirs.length,n:Object.keys(idx).length,idx,must,mustMade:w&&w.made,mustTitle:w&&w.title,mustMissing:w&&w.missing}; }
   async function loadPre(){ if(A.pre!==undefined) return A.pre; try{ A.pre=(await kvGet('index'))||null; }catch(e){ A.pre=null; } return A.pre; }
   async function connect(pick){ const P=box()&&box().querySelector('[data-pre]'); const say=t=>{ if(P) P.innerHTML='<span style="color:#666">'+esc(t)+'</span>'; };
     try{ let root=pick?null:await kvGet('root').catch(()=>null);
       if(root&&(await root.queryPermission({mode:'read'}))!=='granted'&&(await root.requestPermission({mode:'read'}))!=='granted') root=null;
       if(!root){ root=await window.showDirectoryPicker({id:'hml-archive',mode:'read'}); await kvPut('root',root).catch(()=>{}); }
-      say('HML_DOWNLOAD 폴더를 읽는 중…'); const ix=await buildIndex(root,say); if(!ix.n) throw new Error('이 폴더에서 검수 결과(수정목록.json, 시험지 폴더의 ai.json)를 찾지 못했습니다. HML_DOWNLOAD 폴더를 골라 주세요.');
+      say('HML_DOWNLOAD 폴더를 읽는 중…'); const ix=await buildIndex(root,say); if(!ix.n) throw new Error('이 폴더에서 검수 결과(검수자목록.json, 수정목록.json, 시험지 폴더의 ai.json)를 찾지 못했습니다. 그 파일이 있는 폴더를 골라 주세요.');
       await kvPut('index',ix).catch(()=>{}); A.pre=ix; lastId=null; tick(); }
     catch(e){ if(e.name==='AbortError') { showPre(itemIdOf()); return; } say('폴더를 읽지 못했습니다: '+e.message); } }
+  // ---------- 꼭 수정 목록(검수자 모드): 목록 순서대로 이전/다음, 완료 표시(이 브라우저에 저장) ----------
+  const doneMap=()=>{ try{ return JSON.parse(LS('hmlAi3MustDone')||'{}'); }catch(e){ return {}; } };
+  function mustBar(ix,id){ const M=ix.must, d=doneMap(), i=M.findIndex(m=>m.id===String(id)), dn=M.filter(m=>d[m.id]).length, cur=i>=0?M[i]:null;
+    const b=(k,t,ti)=>'<button data-mu="'+k+'" title="'+esc(ti||'')+'">'+t+'</button>';
+    return '<div style="margin:-2px 0 6px;padding:6px 8px;border-radius:6px;background:#fff;border:2px solid #d93025">'+
+      '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="color:#d93025">꼭 수정 목록</b>'+
+      '<span><b>'+(i>=0?(i+1):'–')+'</b> / '+M.length+'</span><span style="color:#188038">완료 '+dn+'</span>'+
+      b('prev','◀ 이전','목록의 이전 문항')+b('next','다음 ▶','목록의 다음 문항(완료 숨김이면 안 끝난 것만)')+
+      (cur?b('done',d[cur.id]?'완료 취소':'✓ 완료','이 문항을 다 고쳤으면 누르세요(이 브라우저에만 저장)'):b('first','처음 안 끝난 문항으로','목록에서 아직 안 끝난 첫 문항'))+
+      '<label title="완료한 문항은 이전/다음에서 건너뜀"><input type="checkbox" data-muhide'+(LS('hmlAi3MustHide')!=='0'?' checked':'')+'> 완료 건너뛰기</label>'+
+      '<label title="끄면 화면 표시 문제 등 미리 돌린 결과를 모두 보여 줌"><input type="checkbox" data-muonly'+(LS('hmlAi3MustOnly')!=='0'?' checked':'')+'> 꼭 수정만 보기</label></div>'+
+      (cur?'<div style="font-size:12px;color:#555;margin-top:2px">시트 No '+esc(cur.row||'')+' · '+esc(cur.sname)+' · #'+esc(cur.no)+(d[cur.id]?' · <b style="color:#188038">✓ 완료</b>':'')+'</div>':'<div style="font-size:12px;color:#888;margin-top:2px">지금 문항은 꼭 수정 목록에 없습니다.</div>')+
+      (ix.mustMissing?'<div style="font-size:11px;color:#888">아직 검사 안 된 시험지 '+esc(ix.mustMissing)+'개는 목록에 없음</div>':'')+'</div>'; }
+  function gotoItem(id){ const url=location.pathname+Q+'itemId='+id; if(K().go&&document.getElementById('hmlQuick')) K().go(url); else location.href=url; }
+  function bindMust(P,ix,id){ const M=ix.must; if(!(M&&M.length)) return; const hide=()=>LS('hmlAi3MustHide')!=='0';
+    const step=dir=>{ const d=doneMap(); let i=M.findIndex(m=>m.id===String(id)); if(i<0&&dir<0) i=M.length;
+      for(let k=i+dir;k>=0&&k<M.length;k+=dir){ if(!(hide()&&d[M[k].id])) return gotoItem(M[k].id); }
+      alert(dir>0?'목록의 끝입니다.':'목록의 처음입니다.'); };
+    P.querySelectorAll('[data-mu]').forEach(btn=>btn.onclick=()=>{ const k=btn.getAttribute('data-mu');
+      if(k==='prev') step(-1); else if(k==='next') step(1);
+      else if(k==='first'){ const d=doneMap(); const m=M.find(m=>!d[m.id]); if(m) gotoItem(m.id); else alert('모두 완료했습니다.'); }
+      else if(k==='done'){ const d=doneMap(); if(d[id]) delete d[id]; else d[id]=Date.now(); LS('hmlAi3MustDone',JSON.stringify(d)); showPre(id); if(d[id]&&hide()) step(1); } });
+    const h=P.querySelector('[data-muhide]'); if(h) h.onchange=e=>LS('hmlAi3MustHide',e.target.checked?'1':'0');
+    const o=P.querySelector('[data-muonly]'); if(o) o.onchange=e=>{ LS('hmlAi3MustOnly',e.target.checked?'1':'0'); showPre(id); }; }
   async function showPre(id){ const b=box(); if(!b) return; const P=b.querySelector('[data-pre]'); const ix=await loadPre();
     const tag=(t,c)=>'<span style="display:inline-block;padding:0 6px;border-radius:4px;color:#fff;font-size:12px;margin-right:6px;background:'+c+'">'+esc(t)+'</span>';
     if(!ix){ P.innerHTML='<b>미리 돌린 눈검수</b> <button data-con>HML_DOWNLOAD 폴더 연결</button> <span style="color:#666">처음 한 번만 고르면 문항마다 결과가 자동으로 나옵니다.</span>'; P.querySelector('[data-con]').onclick=()=>connect(true); return; }
+    const M=ix.must, mustOnly=!!(M&&M.length)&&LS('hmlAi3MustOnly')!=='0';
     const e=ix.idx[String(id)]; const when=new Date(ix.made||ix.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
     let h='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b>미리 돌린 눈검수</b><span style="font-size:11px;color:#888">'+esc(when)+' 기준 · '+ix.n+'문항</span><span style="flex:1"></span><button data-re title="HML_DOWNLOAD 폴더를 다시 읽음(합치기 뒤에 누르세요)">새로 읽기</button><button data-ch title="눈검수 결과가 있는 다른 폴더 고르기">폴더 바꾸기</button></div>';
-    if(!e) h+='<div style="margin-top:4px;color:#666">이 문항은 미리 돌린 결과가 없습니다(검수 대상 아님 또는 걸린 것 없음). 필요하면 아래 <b>이 문항 AI 검사</b>를 누르세요.</div>';
+    if(M&&M.length) h=mustBar(ix,id)+h;
+    if(e&&mustOnly&&!e.must) h+='<div style="margin-top:4px;padding:4px 8px;border-radius:4px;background:#e6f4ea;color:#188038;font-weight:bold">✓ 꼭 수정 목록에 없는 문항입니다(고칠 것 없음)</div>';
+    else if(e&&mustOnly){ const lines=e.must.map(x=>{ const t=String(x[3]||''), d=String(x[4]||'');
+        if(/확인 필요/.test(t+d)) return tag('확인 필요','#e37400')+esc(d);
+        if(/정답 의심|정답 차이/.test(t+d)) return tag('정답','#d93025')+esc(x[2]==='AI'?d:t+': '+d);
+        if(x[2]==='AI') return tag('AI 눈검수','#7b1fa2')+esc(d);
+        const v=(x[5]&&typeof x[5]==='object')?x[5]:null; return tag(v?'고칠 것':'눈 판정 전',v?'#d93025':'#e37400')+esc(t)+(v&&v.reason?' <span style="color:#666">'+esc(v.reason)+'</span>':'')+'<div style="font-family:monospace;font-size:11px;color:#555;white-space:pre-wrap">'+esc(d.slice(0,300))+'</div>'; });
+      h+='<div style="margin-top:4px;color:#555;font-size:12px">시험지 '+esc(e.sid)+(e.sname?' '+esc(e.sname):'')+' · #'+esc(e.no)+'</div><ul style="margin:4px 0;padding-left:18px">'+lines.map(l=>'<li style="margin:2px 0">'+l+'</li>').join('')+'</ul>'; }
+    else if(!e) h+='<div style="margin-top:4px;color:#666">이 문항은 미리 돌린 결과가 없습니다(검수 대상 아님 또는 걸린 것 없음). 필요하면 아래 <b>이 문항 AI 검사</b>를 누르세요.</div>';
     else{ const lines=[]; let k=0; const vs=(e.vision&&e.vision.verdicts)||[];
       for(const x of (e.queue||[])){ if(x[2]==='화면') lines.push(tag('화면','#1a73e8')+esc(x[3])); else if(x[2]==='AI') lines.push(tag('AI 추가','#d93025')+esc(x[4]));
         else if(x[2]==='내용'){ k++; const v=(x[5]&&typeof x[5]==='object')?x[5]:null; lines.push(tag(v?(v.real?'고칠 것':'표기만 다름'):'눈 판정 전',v?(v.real?'#d93025':'#5f6368'):'#e37400')+esc(x[3])+(v&&v.reason?' <span style="color:#666">'+esc(v.reason)+'</span>':'')+'<div style="font-family:monospace;font-size:11px;color:#555;white-space:pre-wrap">'+esc(String(x[4]||'').slice(0,300))+'</div>'); } }
@@ -85,7 +122,7 @@ window.__hmlAi3Build='2026-11-17 10:34';
       h+=lines.length?'<ul style="margin:4px 0;padding-left:18px">'+lines.map(l=>'<li style="margin:2px 0">'+l+'</li>').join('')+'</ul>':'';
       if(!real) h+='<div style="margin-top:4px;padding:4px 8px;border-radius:4px;background:#e6f4ea;color:#188038;font-weight:bold">✓ 미리 검수: 고칠 내용 없음'+(e.queue?'':' (표기 차이뿐)')+'</div>';
       h+='<div style="font-size:11px;color:#888;margin-top:2px">미리 검수한 때의 결과입니다. 그 뒤 고쳤다면 바로 검사(아래) 결과가 최신입니다.</div>'; }
-    P.innerHTML=h; const re=P.querySelector('[data-re]'); if(re) re.onclick=()=>connect(false); const ch=P.querySelector('[data-ch]'); if(ch) ch.onclick=()=>connect(true); }
+    P.innerHTML=h; bindMust(P,ix,id); const re=P.querySelector('[data-re]'); if(re) re.onclick=()=>connect(false); const ch=P.querySelector('[data-ch]'); if(ch) ch.onclick=()=>connect(true); }
 
   // ---------- 칸 그리기 ----------
   const opt=()=>({model:LS('hmlAi3Model')||'claude-haiku-5-5',solve:LS('hmlAi3Solve')!=='0',meta:LS('hmlAi3Meta')!=='0',auto:LS('hmlAi3Auto')==='1'});
