@@ -1,6 +1,6 @@
 // AI 눈검수(ver3): 바로 검사(ver2) 옆 칸에 'AI 눈검수' 칸을 붙임.
 // 버튼을 누르면 이 문항의 HML 캡처(문제·해답)와 HTML 내용을 AI(기본 Claude Haiku 5.5)에 보내 비교하고, 원하면 문제풀이·메타정보도 판단함.
-// API 키와 캡처 이미지는 확장(배경)에서만 다룸: 이 페이지 코드는 키를 볼 수 없음. CMS는 읽기만 함.
+// API 키와 캡처 이미지는 확장(배경)에서만 다룸: 이 페이지 코드는 키를 볼 수 없음. CMS에 쓰는 것은 수정안 [붙여넣기]·[반영]을 누를 때뿐.
 (function(){
   const Q=String.fromCharCode(63);
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -53,6 +53,10 @@
     const w=await readJson(root,'검수자목록.json'); let must=null;
     if(w&&Array.isArray(w.items)){ must=[]; for(const q of w.items){ if(!q.itemId) continue; const e=at(String(q.itemId)); e.sid=e.sid||q.sid; e.no=e.no||q.no; e.sname=e.sname||q.sname; e.must=q.iss||[]; e.tags=q.tags||[];
         must.push({id:String(q.itemId),sid:q.sid,no:q.no,sname:q.sname,row:q.row,tags:q.tags||[]}); } }
+    // AI 수정본(수정본만들기.py): 수정안을 문항마다 붙임. 승인본(수정본_승인.json)이 있으면 그 수정안을 우선 씀
+    const fx=await readJson(root,'수정본.json'), ap=await readJson(root,'수정본_승인.json'); let fixN=0;
+    if(fx&&Array.isArray(fx.items)) for(const q of fx.items){ if(!q.itemId) continue; at(String(q.itemId)).fix={state:q.state,edits:(q.edits||[]).map(x=>({field:x.field,find:x.find,replace:x.replace,all:!!x.all,src:x.src,why:x.why})),note:q.note||'',hml_also:!!q.hml_also}; fixN++; }
+    if(ap&&Array.isArray(ap.items)) for(const q of ap.items){ if(!q.itemId) continue; const e=at(String(q.itemId)); e.fix=Object.assign(e.fix||{note:''},{state:'준비',approved:true,hml_also:!!q.hml_also,edits:(q.edits||[]).map(x=>({field:x.field,find:x.find,replace:x.replace,all:!!x.all,src:x.src,why:(x.why||'')}))}); }
     const dirs=[]; for await (const [name,h] of root.entries()) if(h.kind==='directory'&&/^\d+_/.test(name)) dirs.push([name,h]);
     let k=0, n=0; const one=async()=>{ while(k<dirs.length){ const [name,h]=dirs[k++]; n++; if(msg&&n%20===0) msg('폴더 읽는 중… '+n+'/'+dirs.length);
         const sid=name.split('_')[0]; const ai=await readJson(h,'ai.json'), me=await readJson(h,'메타점검.json');
@@ -60,13 +64,13 @@
           if(it.vision) e.vision=it.vision; if(Array.isArray(it.problem)&&it.problem.length) e.problem=it.problem; if(ai.model) e.model=ai.model; }
         for(const [no,it] of Object.entries((me&&me.items)||{})){ if(!it||!it.itemId||!(it.issues||[]).length) continue; const e=at(String(it.itemId)); e.sid=e.sid||sid; e.no=e.no||no; e.meta=it.issues; } } };
     await Promise.all(Array.from({length:8},one));
-    return {at:Date.now(),made:(j&&j.made)||(w&&w.made),sheets:dirs.length,n:Object.keys(idx).length,idx,must,mustMade:w&&w.made,mustTitle:w&&w.title,mustMissing:w&&w.missing}; }
+    return {at:Date.now(),made:(j&&j.made)||(w&&w.made),sheets:dirs.length,n:Object.keys(idx).length,idx,must,mustMade:w&&w.made,mustTitle:w&&w.title,mustMissing:w&&w.missing,fixMade:fx&&fx.made,fixApproved:!!ap}; }
   async function loadPre(){ if(A.pre!==undefined) return A.pre; try{ A.pre=(await kvGet('index'))||null; }catch(e){ A.pre=null; } return A.pre; }
   async function connect(pick){ const P=box()&&box().querySelector('[data-pre]'); const say=t=>{ if(P) P.innerHTML='<span style="color:#666">'+esc(t)+'</span>'; };
     try{ let root=pick?null:await kvGet('root').catch(()=>null);
       if(root&&(await root.queryPermission({mode:'read'}))!=='granted'&&(await root.requestPermission({mode:'read'}))!=='granted') root=null;
       if(!root){ root=await window.showDirectoryPicker({id:'hml-archive',mode:'read'}); await kvPut('root',root).catch(()=>{}); }
-      say('HML_DOWNLOAD 폴더를 읽는 중…'); const ix=await buildIndex(root,say); if(!ix.n) throw new Error('이 폴더에서 검수 결과(검수자목록.json, 수정목록.json, 시험지 폴더의 ai.json)를 찾지 못했습니다. 그 파일이 있는 폴더를 골라 주세요.');
+      say('HML_DOWNLOAD 폴더를 읽는 중…'); const ix=await buildIndex(root,say); if(!ix.n) throw new Error('이 폴더에서 검수 결과(검수자목록.json, 수정본.json, 수정목록.json, 시험지 폴더의 ai.json)를 찾지 못했습니다. 그 파일이 있는 폴더를 골라 주세요.');
       await kvPut('index',ix).catch(()=>{}); A.pre=ix; lastId=null; tick(); }
     catch(e){ if(e.name==='AbortError') { showPre(itemIdOf()); return; } say('폴더를 읽지 못했습니다: '+e.message); } }
   // ---------- 꼭 수정 목록(검수자 모드): 목록 순서대로 이전/다음, 완료 표시(이 브라우저에 저장) ----------
@@ -82,7 +86,7 @@
       '<label title="끄면 화면 표시 문제 등 미리 돌린 결과를 모두 보여 줌"><input type="checkbox" data-muonly'+(LS('hmlAi3MustOnly')!=='0'?' checked':'')+'> 꼭 수정만 보기</label></div>'+
       (cur?'<div style="font-size:12px;color:#555;margin-top:2px">시트 No '+esc(cur.row||'')+' · '+esc(cur.sname)+' · #'+esc(cur.no)+(d[cur.id]?' · <b style="color:#188038">✓ 완료</b>':'')+'</div>':'<div style="font-size:12px;color:#888;margin-top:2px">지금 문항은 꼭 수정 목록에 없습니다.</div>')+
       (ix.mustMissing?'<div style="font-size:11px;color:#888">아직 검사 안 된 시험지 '+esc(ix.mustMissing)+'개는 목록에 없음</div>':'')+'</div>'; }
-  function gotoItem(id){ const url=location.pathname+Q+'itemId='+id; if(K().go&&document.getElementById('hmlQuick')) K().go(url); else location.href=url; }
+  function gotoItem(id){ const url=location.pathname+Q+'itemId='+id; if(isModify()){ location.href=url; return; } if(K().go&&document.getElementById('hmlQuick')) K().go(url); else location.href=url; }
   function bindMust(P,ix,id){ const M=ix.must; if(!(M&&M.length)) return; const hide=()=>LS('hmlAi3MustHide')!=='0';
     const step=dir=>{ const d=doneMap(); let i=M.findIndex(m=>m.id===String(id)); if(i<0&&dir<0) i=M.length;
       for(let k=i+dir;k>=0&&k<M.length;k+=dir){ if(!(hide()&&d[M[k].id])) return gotoItem(M[k].id); }
@@ -100,6 +104,7 @@
     const e=ix.idx[String(id)]; const when=new Date(ix.made||ix.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
     let h='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b>미리 돌린 눈검수</b><span style="font-size:11px;color:#888">'+esc(when)+' 기준 · '+ix.n+'문항</span><span style="flex:1"></span><button data-re title="HML_DOWNLOAD 폴더를 다시 읽음(합치기 뒤에 누르세요)">새로 읽기</button><button data-ch title="눈검수 결과가 있는 다른 폴더 고르기">폴더 바꾸기</button></div>';
     if(M&&M.length) h=mustBar(ix,id)+h;
+    if(e&&e.fix) h=fixBlock(e,id)+h;
     if(e&&mustOnly&&!e.must) h+='<div style="margin-top:4px;padding:4px 8px;border-radius:4px;background:#e6f4ea;color:#188038;font-weight:bold">✓ 꼭 수정 목록에 없는 문항입니다(고칠 것 없음)</div>';
     else if(e&&mustOnly){ const lines=e.must.map(x=>{ const t=String(x[3]||''), d=String(x[4]||'');
         if(/확인 필요/.test(t+d)) return tag('확인 필요','#e37400')+esc(d);
@@ -120,7 +125,112 @@
       h+=lines.length?'<ul style="margin:4px 0;padding-left:18px">'+lines.map(l=>'<li style="margin:2px 0">'+l+'</li>').join('')+'</ul>':'';
       if(!real) h+='<div style="margin-top:4px;padding:4px 8px;border-radius:4px;background:#e6f4ea;color:#188038;font-weight:bold">✓ 미리 검수: 고칠 내용 없음'+(e.queue?'':' (표기 차이뿐)')+'</div>';
       h+='<div style="font-size:11px;color:#888;margin-top:2px">미리 검수한 때의 결과입니다. 그 뒤 고쳤다면 바로 검사(아래) 결과가 최신입니다.</div>'; }
-    P.innerHTML=h; bindMust(P,ix,id); const re=P.querySelector('[data-re]'); if(re) re.onclick=()=>connect(false); const ch=P.querySelector('[data-ch]'); if(ch) ch.onclick=()=>connect(true); }
+    P.innerHTML=h; bindMust(P,ix,id); bindFix(P,e,id); const re=P.querySelector('[data-re]'); if(re) re.onclick=()=>connect(false); const ch=P.querySelector('[data-ch]'); if(ch) ch.onclick=()=>connect(true); }
+
+  // ---------- AI 수정본 붙여넣기(수정본.json): 꼭 수정 문항의 HTML 수정안을 보여 주고, 수정 화면에 붙여넣고, 전체 반영 ----------
+  // 수정 화면은 문항 문서를 <script type="application/json">에 담아 두고 [HTML 수정] 탭을 열 때 편집기를 만든다.
+  // 편집기가 만들어지기 전에 이 JSON 안의 글을 고치면, 편집기도 [전체 반영]도 고친 글을 쓴다.
+  const FX={ log:()=>{ try{ return JSON.parse(LS('hmlAi3FixLog')||'{}'); }catch(e){ return {}; } }, saveLog:v=>LS('hmlAi3FixLog',JSON.stringify(v)) };
+  const isModify=()=>/\/item\/all\/modify\.donga/.test(location.pathname);
+  const loadedId=()=>{ try{ const n=performance.getEntriesByType('navigation')[0]; return (String(n&&n.name||location.href).match(/itemId=(\d+)/)||[])[1]; }catch(e){ return itemIdOf(); } };
+  const jsonEls=()=>[...document.querySelectorAll('script[type="application/json"]')].filter(el=>{ const p=panelEl(); return !(p&&p.contains(el))&&/Html"|"content"/.test(el.textContent); });
+  const mounted=()=>{ try{ return Object.keys(window.itemEditors||{}).filter(k=>window.itemEditors[k]).length>0; }catch(e){ return false; } };
+  const htmlTab=()=>[...document.querySelectorAll('.nav-link,[role=tab],button,a')].find(b=>b.textContent.trim()==='HTML 수정'&&!(panelEl()&&panelEl().contains(b)));
+  function walkStr(o,path,fn){ Object.keys(o||{}).forEach(k=>{ const v=o[k], p=path.concat(k); if(typeof v==='string') fn(o,k,v,p); else if(v&&typeof v==='object') walkStr(v,p,fn); }); }
+  function pathHit(p,field){ const m=String(field).match(/^(\w+)(?:\[(\d+)\])?$/); if(!m) return false; const i=p.lastIndexOf(m[1]); if(i<0) return false; return m[2]==null?i===p.length-1:String(p[i+1])===m[2]; }
+  function pasteDocs(edits){
+    const els=jsonEls(); if(!els.length) throw new Error('문항 문서(JSON)를 찾지 못했습니다');
+    const docs=els.map(el=>{ try{ return JSON.parse(el.textContent); }catch(e){ return null; } }); const rep=[], doneAll={};
+    for(const ed of edits){
+      if(ed.all){ const key=ed.find+'\u0000'+ed.replace; if(doneAll[key]){ rep.push({ok:true,ed,msg:'앞에서 함께 바꿈'}); continue; }
+        let n=0; docs.forEach(d=>d&&walkStr(d,[],(o,k,v)=>{ if(v.includes(ed.find)){ n+=v.split(ed.find).length-1; o[k]=v.split(ed.find).join(ed.replace); } }));
+        doneAll[key]=1; rep.push(n?{ok:true,ed,msg:n+'곳'}:{ok:false,ed,msg:'찾을 글 없음(이미 고쳐졌을 수 있음)'}); continue; }
+      const hits=[], any=[];
+      docs.forEach(d=>d&&walkStr(d,[],(o,k,v,p)=>{ const c=v.split(ed.find).length-1; if(c){ const h={o,k,c,p}; any.push(h); if(pathHit(p,ed.field)) hits.push(h); } }));
+      const use=hits.length?hits:any.filter(h=>!/Text$/.test(h.k));
+      if(!use.length){ rep.push({ok:false,ed,msg:'찾을 글이 화면에 없음'}); continue; }
+      if(use.some(h=>h.c!==1)){ rep.push({ok:false,ed,msg:'찾을 글이 여러 번'}); continue; }
+      use.forEach(h=>{ h.o[h.k]=h.o[h.k].replace(ed.find,()=>ed.replace); }); rep.push({ok:true,ed,msg:'바꿈'}); }
+    if(rep.some(r=>!r.ok)) return {ok:false,rep};
+    const before={}; els.forEach((el,i)=>{ if(!docs[i]) return; const t=JSON.stringify(docs[i]); if(t!==JSON.stringify(JSON.parse(el.textContent))){ before[el.id||('json-'+i)]=el.textContent; el.textContent=t; } });
+    return {ok:true,rep,before}; }
+  async function waitFor(fn,ms,what){ const t0=Date.now(); while(Date.now()-t0<ms){ let v; try{ v=fn(); }catch(e){ v=null; } if(v) return v; await new Promise(r=>setTimeout(r,250)); } throw new Error('시간 초과: '+what); }
+  function fixMsg(t,c){ const m=box()&&box().querySelector('[data-fxmsg]'); if(m){ m.textContent=t; m.style.color=c||'#333'; } }
+  async function verifyFix(id,edits){ let t=await (await fetch('/item/all/detail.donga'+Q+'itemId='+id,{credentials:'include'})).text();
+    t=t.replace(/\\u([0-9a-fA-F]{4})/g,(_,h)=>String.fromCharCode(parseInt(h,16))).replace(/\\\//g,'/').replace(/\\"/g,'"');
+    const ta=document.createElement('textarea'); ta.innerHTML=t; const t2=ta.value, has=s=>t.includes(s)||t2.includes(s), bad=[];
+    edits.forEach(ed=>{ if(ed.all){ if(!ed.replace.includes(ed.find)&&has(ed.find)) bad.push('남아 있음: '+ed.find.slice(0,30)); } else if(!ed.replace.includes(ed.find)&&has(ed.find)&&!has(ed.replace)) bad.push('안 바뀜: '+ed.find.slice(0,30)); });
+    return bad; }
+  function doPaste(id,e){ const f=e.fix;
+    if(!isModify()||loadedId()!==String(id)){ location.href='/item/all/modify.donga'+Q+'itemId='+id+'#hmlFix'; return; }
+    if(mounted()){ history.replaceState(null,'',location.pathname+location.search+'#hmlFix'); location.reload(); return; }
+    const r=pasteDocs(f.edits);
+    if(!r.ok){ fixMsg('붙여넣지 않았습니다: '+r.rep.filter(x=>!x.ok).map(x=>x.ed.field+' '+x.msg).join(' / '),'#d93025'); return; }
+    const L=FX.log(); L[id]={st:'붙여넣음',at:Date.now(),before:r.before}; FX.saveLog(L);
+    A.fxPasted=id; (async()=>{ let om=null; try{ om=await fillOmr(); }catch(er){ om={ok:false,msg:'OMR 채우기 실패: '+er.message}; }
+      const tab=htmlTab(); if(tab) try{ tab.click(); }catch(er){}
+      await showPre(id); fixMsg('붙여넣었습니다('+r.rep.map(x=>x.msg).join(', ')+'). '+(om?om.msg+'. ':'')+'HTML 탭에서 확인하고 [반영]을 누르세요. 잘못됐으면 새로고침하면 원래대로.',om&&!om.ok?'#b06000':'#188038'); })(); }
+  function doUndo(id){ const L=FX.log(); const b=L[id]&&L[id].before; if(!b){ fixMsg('되돌릴 기록이 없습니다.','#d93025'); return; }
+    if(!isModify()||loadedId()!==String(id)){ location.href='/item/all/modify.donga'+Q+'itemId='+id+'#hmlFixUndo'; return; }
+    if(mounted()){ history.replaceState(null,'',location.pathname+location.search+'#hmlFixUndo'); location.reload(); return; }
+    let n=0; jsonEls().forEach((el,i)=>{ const k=el.id||('json-'+i); if(k in b){ el.textContent=b[k]; n++; } });
+    if(!n){ fixMsg('되돌릴 칸을 이 화면에서 찾지 못했습니다.','#d93025'); return; }
+    L[id].st='되돌림'; FX.saveLog(L); const tab=htmlTab(); if(tab) tab.click(); A.fxPasted=null;
+    fixMsg('원래 글로 되돌렸습니다. 반영된 문항이었다면 [반영]을 눌러야 저장됩니다.','#b06000'); }
+  async function doApply(id,e){ if(!isModify()||A.fxPasted!==id){ fixMsg('먼저 [붙여넣기]를 누르세요.','#d93025'); return; }
+    if(typeof window.itemApplyAll!=='function'){ fixMsg('전체 반영 기능을 찾지 못했습니다.','#d93025'); return; }
+    fixMsg('전체 반영 중…'); window.itemApplyAll();
+    const modal=document.getElementById('applyAllModal');
+    try{ await waitFor(()=>modal&&modal.classList.contains('show'),5000,'확인창'); }catch(er){ fixMsg('전체 반영이 막혔습니다(필수 항목·정답 등). 화면 안내를 확인하세요.','#d93025'); return; }
+    LS('hmlAi3FixPending',JSON.stringify({id,edits:e.fix.edits,at:Date.now()}));
+    await new Promise(r=>setTimeout(r,300)); modal.querySelector('[data-action-ok]').click(); }
+  // 반영 뒤 화면이 바뀌면(다음 페이지에서) 결과 확인 → 완료 표시 → 꼭 수정 목록의 다음 문항 수정 화면으로
+  async function checkPending(ix){ let p=null; try{ p=JSON.parse(LS('hmlAi3FixPending')||'null'); }catch(e){}
+    if(!p||Date.now()-p.at>10*60000){ if(p) LS('hmlAi3FixPending',''); return false; }
+    if(isModify()&&loadedId()===String(p.id)) return false;   // 아직 수정 화면(반영 실패 등)
+    LS('hmlAi3FixPending',''); const bad=await verifyFix(p.id,p.edits).catch(er=>['확인 못함: '+er.message]);
+    const L=FX.log(); L[p.id]=Object.assign(L[p.id]||{},{st:bad.length?'반영(확인 필요)':'반영',at:Date.now(),msg:bad.join('; ')}); FX.saveLog(L);
+    if(bad.length){ alert('반영했지만 확인이 필요합니다: '+bad.join('; ')); return false; }
+    const d=doneMap(); d[p.id]=Date.now(); LS('hmlAi3MustDone',JSON.stringify(d));
+    const M=(ix&&ix.must)||[]; let i=M.findIndex(m=>m.id===String(p.id)), nx=null;
+    for(let k=i+1;k<M.length;k++) if(!d[M[k].id]&&!(LS('hmlAi3FixSkipNoFix')==='1'&&!(ix.idx[M[k].id]||{}).fix)){ nx=M[k]; break; }
+    if(nx&&LS('hmlAi3FixAutoNext')!=='0'){ location.href='/item/all/modify.donga'+Q+'itemId='+nx.id; return true; }
+    return false; }
+  function fixBlock(e,id){ const f=e&&e.fix; if(!f) return '';
+    const L=FX.log()[id]||{}, ok=f.state==='준비'&&f.edits&&f.edits.length;
+    const st=L.st?'<span style="color:'+(/반영$/.test(L.st)?'#188038':'#b06000')+';font-weight:bold"> · '+esc(L.st)+'</span>':'';
+    let h='<div style="margin:6px 0;padding:6px 8px;border-radius:6px;background:#fff;border:2px solid #188038"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="color:#188038">수정안</b>'+(f.approved?'<span style="font-size:12px;color:#188038">승인본</span>':'<span style="font-size:12px;color:#888">검토 전</span>')+st+
+      (f.hml_also?'<span style="color:#b06000;font-size:12px">HML·OMR도 직접 수정</span>':'')+'<span style="flex:1"></span>'+
+      (ok?'<button data-fx="paste" style="background:#188038;color:#fff;border:0;border-radius:4px;padding:3px 10px;font-weight:bold">붙여넣기</button><button data-fx="apply" style="background:#1a73e8;color:#fff;border:0;border-radius:4px;padding:3px 10px;font-weight:bold" title="CMS [전체 반영] → 확인 → 완료 표시 → 다음 문항">반영</button>':'')+
+      (L.before?'<button data-fx="undo" title="바꾸기 전 글로 다시 붙여넣기">되돌리기</button>':'')+'</div>';
+    if(!ok) h+='<div style="font-size:12px;color:#b06000">'+esc(f.state)+(f.note?' · '+esc(f.note):'')+' (수정안 없음 → 직접 고치세요)</div>';
+    else h+=f.edits.map(ed=>'<div style="font-family:Consolas,monospace;font-size:11px;border-top:1px dashed #ddd;padding:2px 0;word-break:break-all"><span style="color:#888">'+esc(ed.src||'')+' '+esc(ed.why||ed.field)+'</span><br><del style="background:#fce8e6;color:#d93025">'+esc(String(ed.find).slice(0,200))+'</del> → <ins style="background:#e6f4ea;color:#188038;text-decoration:none">'+esc(String(ed.replace).slice(0,200))+'</ins></div>').join('')+(f.note?'<div style="font-size:12px;color:#666">AI: '+esc(f.note)+'</div>':'');
+    return h+'<div data-fxmsg style="font-size:12px;margin-top:2px"></div></div>'; }
+  function bindFix(P,e,id){ if(!e||!e.fix) return; P.querySelectorAll('[data-fx]').forEach(b=>b.onclick=()=>{ const k=b.getAttribute('data-fx');
+      if(k==='paste') doPaste(id,e); else if(k==='apply') doApply(id,e).catch(er=>fixMsg(er.message,'#d93025')); else if(k==='undo') doUndo(id); });
+    if(location.hash==='#hmlFix'||location.hash==='#hmlFixUndo'){ const u=location.hash==='#hmlFixUndo'; history.replaceState(null,'',location.pathname+location.search);
+      setTimeout(()=>u?doUndo(id):doPaste(id,e),500); } }
+
+  // ---------- OMR: 주관식 정답 칸이 비어 있으면 [전체 반영]이 막힘 → HTML 정답에서 채움('16 cm' → 정답 16, 뒤 수식어 cm) ----------
+  function splitAnswer(raw){ let t=String(raw||'').replace(/<[^>]+>/g,' ').replace(/\$/g,' ').replace(/\\hspace\{[^}]*\}|\\[,;:! ]|~/g,' ').replace(/\s+/g,' ').trim();
+    if(!t||/[①-⑩]|풀이\s*참조|,|\\text\{|[가-힣]{2,}/.test(t)) return null;
+    let unit=''; const m=t.match(/^(.*?)\s*\\mathrm\{\s*([A-Za-z]+(?:\^\{?[23]\}?)?)\s*\}\s*$/)||t.match(/^(.*?\d)\s*(cm\^\{?[23]\}?|m\^\{?[23]\}?|cm|mm|km|m|kg|g|mL|L|개|명|원|번)\s*$/);
+    if(m){ t=m[1].trim(); unit=m[2].replace(/\^\{?([23])\}?/,'^$1'); } return t?{answer:t,suffix:unit}:null; }
+  function omrInputs(){ const out={}; document.querySelectorAll('math-field,input,textarea,[contenteditable=""],[contenteditable=true],[placeholder],[aria-placeholder],[data-placeholder]').forEach(el=>{
+      if(!el.offsetParent||(panelEl()&&panelEl().contains(el))) return;
+      let ph=el.getAttribute('placeholder')||el.getAttribute('aria-placeholder')||el.getAttribute('data-placeholder')||(typeof el.placeholder==='string'?el.placeholder:'')||'';
+      if(!ph&&el.closest){ const c=el.closest('[placeholder],[data-placeholder]'); if(c) ph=c.getAttribute('placeholder')||c.getAttribute('data-placeholder')||''; }
+      const k=/정답\s*입력/.test(ph)?'answer':/뒤\s*수식어/.test(ph)?'suffix':/앞\s*수식어/.test(ph)?'prefix':null; if(k&&!out[k]) out[k]=el; }); return out; }
+  const fieldVal=el=>{ try{ if(typeof el.getValue==='function') return el.getValue()||''; }catch(e){} if('value' in el&&typeof el.value==='string') return el.value; return (el.textContent||'').trim(); };
+  function setField(el,v){ try{ if(typeof el.setValue==='function') el.setValue(v); else if('value' in el) el.value=v; else el.textContent=v; }catch(e){ el.textContent=v; }
+    ['input','change','blur'].forEach(t=>{ try{ el.dispatchEvent(new Event(t,{bubbles:true,composed:true})); }catch(e){} }); if(el.style) el.style.outline='3px solid #f59f00'; }
+  const tabBtn=name=>[...document.querySelectorAll('.nav-link,[role=tab],button,a')].find(b=>b.textContent.trim()===name&&!(panelEl()&&panelEl().contains(b)));
+  async function fillOmr(){ const tab=tabBtn('OMR 수정'); if(tab){ tab.click(); await new Promise(r=>setTimeout(r,700)); }
+    const f=omrInputs(); if(!f.answer||String(fieldVal(f.answer)).trim()) return null;
+    let ans=''; jsonEls().forEach(el=>{ let d=null; try{ d=JSON.parse(el.textContent); }catch(e){} if(d) walkStr(d,[],(o,k,v)=>{ if(!ans&&(k==='answerText'||k==='correctHtml')&&v) ans=v; }); });
+    const sp=splitAnswer(ans); if(!sp) return {ok:false,msg:'OMR 정답이 비어 있음. 나눌 수 없는 답('+String(ans).slice(0,30)+') → OMR 수정 탭에서 직접 입력'};
+    setField(f.answer,sp.answer); if(sp.suffix&&f.suffix) setField(f.suffix,sp.suffix);
+    const ok=!!String(fieldVal(f.answer)).trim(); return {ok,msg:'OMR 정답 '+sp.answer+(sp.suffix?', 뒤 수식어 '+sp.suffix:'')+(ok?' 넣음':' 넣기 실패 → OMR 수정 탭에서 직접 입력')}; }
 
   // ---------- 칸 그리기 ----------
   const opt=()=>({model:LS('hmlAi3Model')||'claude-haiku-5-5',solve:LS('hmlAi3Solve')!=='0',meta:LS('hmlAi3Meta')!=='0',auto:LS('hmlAi3Auto')==='1'});
@@ -180,6 +290,7 @@
   let lastId=null, tm=null;
   function tick(){ if(!box()) return; const id=itemIdOf(); if(K().busy) return;
     if(id!==lastId){ lastId=id; showPre(id).catch(()=>{}); if(A.cache[id]) render(id,A.cache[id]); else if(opt().auto) run(); else out('미리 돌린 결과가 없거나, 고친 뒤 다시 확인할 때 <b>이 문항 AI 검사</b>를 누르세요.'); } }
-  if(!A.obs){ A.obs=new MutationObserver(()=>{ clearTimeout(tm); tm=setTimeout(tick,600); }); A.obs.observe(document.body,{childList:true,subtree:true}); }
+  if(!A.obs){ A.obs=new MutationObserver(()=>{ clearTimeout(tm); tm=setTimeout(tick,600); });   A.obs.observe(document.body,{childList:true,subtree:true}); }
+  if(!A.pendChecked){ A.pendChecked=true; loadPre().then(ix=>checkPending(ix)).catch(()=>{}); }
   tick();
 })();
