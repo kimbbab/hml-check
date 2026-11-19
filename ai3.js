@@ -1,5 +1,5 @@
-/* HML AI 눈검수 2026-11-19 19:51 */
-window.__hmlAi3Build='2026-11-19 19:51';
+/* HML AI 눈검수 2026-11-19 19:52 */
+window.__hmlAi3Build='2026-11-19 19:52';
 // AI 눈검수(ver3): 바로 검사(ver2) 옆 칸에 'AI 눈검수' 칸을 붙임.
 // 버튼을 누르면 이 문항의 HML 캡처(문제·해답)와 HTML 내용을 AI(기본 Claude Haiku 5.5)에 보내 비교하고, 원하면 문제풀이·메타정보도 판단함.
 // API 키와 캡처 이미지는 확장(배경)에서만 다룸: 이 페이지 코드는 키를 볼 수 없음. CMS에 쓰는 것은 수정안 [붙여넣기]·[반영]을 누를 때뿐.
@@ -329,11 +329,14 @@ window.__hmlAi3Build='2026-11-19 19:51';
     const todo=order.filter(id=>{ const e=ix.idx[id], f=e&&e.fix; if(!f) return false; if(opt.onlyApproved&&!f.approved) return false;
       const ok=(/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); return ok&&!(L[id]&&/^(완료|반영)/.test(L[id].st)); }).slice(0,opt.n);
     if(!todo.length){ say('돌릴 문항이 없습니다(모두 끝났거나 수정안 없음).'); return; }
+    const RR=opt.recheck?await recheckRoot():null;   // 쓰기 권한 묻기는 팝업보다 먼저(클릭 직후여야 함)
     const W=window.open('about:blank','hmlBatchWork','width=1280,height=900'); if(!W){ say('팝업이 막혔습니다. 팝업 허용 후 다시 누르세요.'); return; }
+    if(opt.recheck&&!RR) say('HML_DOWNLOAD 쓰기 권한이 없어 재검수 목록은 안 남깁니다(수정은 계속).');
     A.batchStop=false; A.batchBusy=true; let fails=0, ok=0, bad=0;
     for(let i=0;i<todo.length;i++){ if(A.batchStop){ say('멈춤(사용자). '+ok+' 완료 · '+bad+' 건너뜀'); break; }
       const id=todo[i], f=ix.idx[id].fix; say('['+(i+1)+'/'+todo.length+'] '+id);
       try{ const t=await batchOne(W,id,f,opt,x=>say('['+(i+1)+'/'+todo.length+'] '+x)); L[id]={st:'완료',msg:t,at:Date.now()}; ok++; fails=0;
+        if(RR) try{ await recheckAdd(RR,id,ix); }catch(er){ L[id].msg+=' · 재검수 목록 못 씀: '+er.message; }
         const d=doneMap(); d[id]=Date.now(); LS('hmlAi3MustDone',JSON.stringify(d)); const FL=FX.log(); FL[id]=Object.assign(FL[id]||{},{st:'반영',at:Date.now()}); FX.saveLog(FL); }
       catch(er){ L[id]={st:er.applied?'반영(확인 필요)':'건너뜀',msg:er.message,at:Date.now()}; bad++; fails++;
         if(er.stop){ BL.set(L); say('멈춤: '+er.message); break; }
@@ -341,6 +344,13 @@ window.__hmlAi3Build='2026-11-19 19:51';
       BL.set(L); }
     A.batchBusy=false; try{ W.close(); }catch(e){}
     const m=box()&&box().querySelector('[data-bmsg]'); if(m&&!/멈춤/.test(m.textContent)) say('끝: '+ok+' 완료 · '+bad+' 건너뜀(기록 CSV에서 이유 확인)'); }
+  // 재검수용: 고친 문항의 새 HTML data를 HML_DOWNLOAD/일괄수정_재검수.json에 모음 → PC에서 'python 엄격검사.py 재검수'가 캡처를 새로 받아 그 문항만 다시 검사
+  async function recheckRoot(){ try{ const r=await kvGet('root'); if(!r) return null; if((await r.queryPermission({mode:'readwrite'}))==='granted'||(await r.requestPermission({mode:'readwrite'}))==='granted') return r; }catch(e){} return null; }
+  async function recheckAdd(root,id,ix){ const d=await getDoc('/item/all/detail.donga'+Q+'itemId='+id);
+    let data=null; for(const sc of d.querySelectorAll('.qv-item script')){ if(sc.textContent.includes(String(id))) try{ data=JSON.parse(sc.textContent); break; }catch(e){} }
+    const e=ix.idx[id]||{}, cur=(await readJson(root,'일괄수정_재검수.json'))||{items:[]}; cur.items=(cur.items||[]).filter(x=>String(x.itemId)!==String(id));
+    cur.items.push({itemId:String(id),sid:e.sid||'',no:e.no||'',data,at:new Date().toISOString()}); cur.made=new Date().toISOString();
+    const fh=await root.getFileHandle('일괄수정_재검수.json',{create:true}), w=await fh.createWritable(); await w.write(JSON.stringify(cur)); await w.close(); }
   function batchCsv(){ const L=BL.get(), rows=[['itemId','결과','내용','시각']].concat(Object.keys(L).map(id=>[id,L[id].st,L[id].msg||'',new Date(L[id].at).toLocaleString('ko-KR')]));
     const csv='﻿'+rows.map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\r\n');
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='일괄수정_기록.csv'; a.click(); }
@@ -350,12 +360,13 @@ window.__hmlAi3Build='2026-11-19 19:51';
     el.innerHTML='<details style="font-size:12px;margin-top:4px"'+(A.batchBusy?' open':'')+'><summary style="cursor:pointer;color:#e8590c;font-weight:bold">일괄 수정 (수정안 '+ids.length+'문항 · 완료 '+dn+')</summary><div style="background:#fff;border:1px solid #e8590c;border-radius:6px;padding:6px 8px;margin-top:4px">'+
       '<div>수정안대로 <b>HTML·HML 수정 → 전체 반영 → 확인 → 승인</b>을 사람 없이 차례로 합니다. 안 맞거나 확인 실패면 그 문항은 건너뛰고, 연속 3번 실패하면 멈춥니다.</div>'+
       '<div style="margin-top:4px">이번에 <input data-bn type="number" min="1" value="'+esc(LS('hmlAi3BatchN')||'5')+'" style="width:56px"> 문항 '+
-      '<label><input type="checkbox" data-bap'+(LS('hmlAi3BatchApprove')!=='0'?' checked':'')+'> 승인(사용)까지</label> '+(ix.fixApproved?'<label><input type="checkbox" data-bonly'+(LS('hmlAi3BatchOnlyAp')!=='0'?' checked':'')+'> 승인본만</label>':'')+'</div>'+
+      '<label><input type="checkbox" data-bap'+(LS('hmlAi3BatchApprove')!=='0'?' checked':'')+'> 승인(사용)까지</label> <label title="고친 문항의 새 HTML을 HML_DOWNLOAD/일괄수정_재검수.json에 모음 → PC에서 python 엄격검사.py 재검수"><input type="checkbox" data-brc'+(LS('hmlAi3BatchRecheck')!=='0'?' checked':'')+'> 재검수 목록 남기기</label> '+(ix.fixApproved?'<label><input type="checkbox" data-bonly'+(LS('hmlAi3BatchOnlyAp')!=='0'?' checked':'')+'> 승인본만</label>':'')+'</div>'+
       '<div style="margin-top:4px"><button data-bgo style="background:#e8590c;color:#fff;border:0;border-radius:4px;padding:3px 10px;font-weight:bold">일괄 시작</button> <button data-bstop>멈춤</button> <button data-bcsv>기록 CSV</button> <button data-bclr title="기록을 지우면 다시 돌림">기록 지우기</button></div>'+
       '<div data-bmsg style="margin-top:4px;color:#333"></div><div style="color:#888">처음엔 5문항으로 돌리고 CMS에서 결과를 확인한 뒤 늘리세요. 작업 창은 닫지 마세요(가려도 됨).</div></div></details>';
     const $=q=>el.querySelector(q);
     $('[data-bgo]').onclick=()=>{ if(A.batchBusy) return; const n=Math.max(1,parseInt($('[data-bn]').value,10)||5); LS('hmlAi3BatchN',String(n)); LS('hmlAi3BatchApprove',$('[data-bap]').checked?'1':'0'); const o=$('[data-bonly]'); if(o) LS('hmlAi3BatchOnlyAp',o.checked?'1':'0');
-      batchRun({n,approve:$('[data-bap]').checked,onlyApproved:!!(o&&o.checked)}).catch(er=>{ A.batchBusy=false; $('[data-bmsg]').textContent='멈춤: '+er.message; }); };
+      LS('hmlAi3BatchRecheck',$('[data-brc]').checked?'1':'0');
+      batchRun({n,approve:$('[data-bap]').checked,onlyApproved:!!(o&&o.checked),recheck:$('[data-brc]').checked}).catch(er=>{ A.batchBusy=false; $('[data-bmsg]').textContent='멈춤: '+er.message; }); };
     $('[data-bstop]').onclick=()=>{ A.batchStop=true; $('[data-bmsg]').textContent='지금 문항까지 하고 멈춥니다…'; };
     $('[data-bcsv]').onclick=batchCsv;
     $('[data-bclr]').onclick=()=>{ if(confirm('일괄 기록을 지울까요? (CMS 내용은 그대로)')){ BL.set({}); batchBar(ix); } }; }
