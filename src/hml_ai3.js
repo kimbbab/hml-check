@@ -164,7 +164,9 @@
   function pasteDocs(edits){
     const els=jsonEls(); if(!els.length) throw new Error('문항 문서(JSON)를 찾지 못했습니다');
     const docs=els.map(el=>{ try{ return JSON.parse(el.textContent); }catch(e){ return null; } }); const rep=[], doneAll={};
+    const lay=x=>(String(x).match(/<(?:img|table|tbody|thead|tr|td|th|col|colgroup|figure)\b[^>]*>|<\/(?:table|tr|td|th|figure)>|\b(?:width|height|style|src|colspan|rowspan)\s*=\s*(?:\"[^\"]*\"|'[^']*')/gi)||[]).sort().join('\n');
     for(const ed of edits){
+      if(lay(ed.find)!==lay(ed.replace)){ rep.push({ok:false,ed,msg:'표·그림 서식(태그·크기·위치)이 바뀌는 수정이라 막음 → 직접 고치세요'}); continue; }
       if(ed.all){ const key=ed.find+'\u0000'+ed.replace; if(doneAll[key]){ rep.push({ok:true,ed,msg:'앞에서 함께 바꿈'}); continue; }
         let n=0; docs.forEach(d=>d&&walkStr(d,[],(o,k,v)=>{ if(v.includes(ed.find)){ n+=v.split(ed.find).length-1; o[k]=v.split(ed.find).join(ed.replace); } }));
         doneAll[key]=1; rep.push(n?{ok:true,ed,msg:n+'곳'}:{ok:false,ed,msg:'찾을 글 없음(이미 고쳐졌을 수 있음)'}); continue; }
