@@ -114,6 +114,9 @@
       if(!cur) c+='<div style="font-size:12px;color:#888;margin-top:2px">이 문항은 꼭 수정 목록에 없습니다(고칠 것 없음).</div>';
       else{ c+='<div style="font-size:12px;color:#666;margin-top:2px">'+esc(cur.sname)+' · #'+esc(cur.no)+' · 시트 No '+esc(cur.row||'')+(d[cur.id]?' · <b style="color:#188038">✓ 완료</b>':'')+'</div>';
         const lines=((e&&e.must)||[]).map(x=>{ const t=String(x[3]||''), dd=String(x[4]||'');
+          if(/원본 오류/.test(t)) return tag('원본 오류','#5f0000')+esc(dd)+' <span style="color:#888;font-size:11px">(HML·HTML·OMR 모두, 직접 판단)</span>';
+          if(/정체 표기/.test(t)) return tag('정체','#00796b')+esc(dd);
+          if(/엄격검사/.test(t)) return tag(/확인 필요/.test(t)?'엄격·확인':'엄격검사','#c2185b')+esc(dd);
           if(/확인 필요/.test(t+dd)) return tag('확인','#e37400')+esc(dd);
           if(/정답 의심|정답 차이/.test(t+dd)) return tag('정답','#d93025')+esc(x[2]==='AI'?dd:t+': '+dd);
           if(x[2]==='AI') return tag('눈검수','#7b1fa2')+esc(dd);
@@ -164,7 +167,9 @@
   function pasteDocs(edits){
     const els=jsonEls(); if(!els.length) throw new Error('문항 문서(JSON)를 찾지 못했습니다');
     const docs=els.map(el=>{ try{ return JSON.parse(el.textContent); }catch(e){ return null; } }); const rep=[], doneAll={};
+    const lay=x=>(String(x).match(/<(?:img|table|tbody|thead|tr|td|th|col|colgroup|figure)\b[^>]*>|<\/(?:table|tr|td|th|figure)>|\b(?:width|height|style|src|colspan|rowspan)\s*=\s*(?:\"[^\"]*\"|'[^']*')/gi)||[]).sort().join('\n');
     for(const ed of edits){
+      if(lay(ed.find)!==lay(ed.replace)){ rep.push({ok:false,ed,msg:'표·그림 서식(태그·크기·위치)이 바뀌는 수정이라 막음 → 직접 고치세요'}); continue; }
       if(ed.all){ const key=ed.find+'\u0000'+ed.replace; if(doneAll[key]){ rep.push({ok:true,ed,msg:'앞에서 함께 바꿈'}); continue; }
         let n=0; docs.forEach(d=>d&&walkStr(d,[],(o,k,v)=>{ if(v.includes(ed.find)){ n+=v.split(ed.find).length-1; o[k]=v.split(ed.find).join(ed.replace); } }));
         doneAll[key]=1; rep.push(n?{ok:true,ed,msg:n+'곳'}:{ok:false,ed,msg:'찾을 글 없음(이미 고쳐졌을 수 있음)'}); continue; }

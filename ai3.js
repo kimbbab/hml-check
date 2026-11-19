@@ -1,5 +1,5 @@
-/* HML AI 눈검수 2026-11-19 08:57 */
-window.__hmlAi3Build='2026-11-19 08:57';
+/* HML AI 눈검수 2026-11-19 19:07 */
+window.__hmlAi3Build='2026-11-19 19:07';
 // AI 눈검수(ver3): 바로 검사(ver2) 옆 칸에 'AI 눈검수' 칸을 붙임.
 // 버튼을 누르면 이 문항의 HML 캡처(문제·해답)와 HTML 내용을 AI(기본 Claude Haiku 5.5)에 보내 비교하고, 원하면 문제풀이·메타정보도 판단함.
 // API 키와 캡처 이미지는 확장(배경)에서만 다룸: 이 페이지 코드는 키를 볼 수 없음. CMS에 쓰는 것은 수정안 [붙여넣기]·[반영]을 누를 때뿐.
@@ -116,6 +116,9 @@ window.__hmlAi3Build='2026-11-19 08:57';
       if(!cur) c+='<div style="font-size:12px;color:#888;margin-top:2px">이 문항은 꼭 수정 목록에 없습니다(고칠 것 없음).</div>';
       else{ c+='<div style="font-size:12px;color:#666;margin-top:2px">'+esc(cur.sname)+' · #'+esc(cur.no)+' · 시트 No '+esc(cur.row||'')+(d[cur.id]?' · <b style="color:#188038">✓ 완료</b>':'')+'</div>';
         const lines=((e&&e.must)||[]).map(x=>{ const t=String(x[3]||''), dd=String(x[4]||'');
+          if(/원본 오류/.test(t)) return tag('원본 오류','#5f0000')+esc(dd)+' <span style="color:#888;font-size:11px">(HML·HTML·OMR 모두, 직접 판단)</span>';
+          if(/정체 표기/.test(t)) return tag('정체','#00796b')+esc(dd);
+          if(/엄격검사/.test(t)) return tag(/확인 필요/.test(t)?'엄격·확인':'엄격검사','#c2185b')+esc(dd);
           if(/확인 필요/.test(t+dd)) return tag('확인','#e37400')+esc(dd);
           if(/정답 의심|정답 차이/.test(t+dd)) return tag('정답','#d93025')+esc(x[2]==='AI'?dd:t+': '+dd);
           if(x[2]==='AI') return tag('눈검수','#7b1fa2')+esc(dd);
@@ -166,7 +169,9 @@ window.__hmlAi3Build='2026-11-19 08:57';
   function pasteDocs(edits){
     const els=jsonEls(); if(!els.length) throw new Error('문항 문서(JSON)를 찾지 못했습니다');
     const docs=els.map(el=>{ try{ return JSON.parse(el.textContent); }catch(e){ return null; } }); const rep=[], doneAll={};
+    const lay=x=>(String(x).match(/<(?:img|table|tbody|thead|tr|td|th|col|colgroup|figure)\b[^>]*>|<\/(?:table|tr|td|th|figure)>|\b(?:width|height|style|src|colspan|rowspan)\s*=\s*(?:\"[^\"]*\"|'[^']*')/gi)||[]).sort().join('\n');
     for(const ed of edits){
+      if(lay(ed.find)!==lay(ed.replace)){ rep.push({ok:false,ed,msg:'표·그림 서식(태그·크기·위치)이 바뀌는 수정이라 막음 → 직접 고치세요'}); continue; }
       if(ed.all){ const key=ed.find+'\u0000'+ed.replace; if(doneAll[key]){ rep.push({ok:true,ed,msg:'앞에서 함께 바꿈'}); continue; }
         let n=0; docs.forEach(d=>d&&walkStr(d,[],(o,k,v)=>{ if(v.includes(ed.find)){ n+=v.split(ed.find).length-1; o[k]=v.split(ed.find).join(ed.replace); } }));
         doneAll[key]=1; rep.push(n?{ok:true,ed,msg:n+'곳'}:{ok:false,ed,msg:'찾을 글 없음(이미 고쳐졌을 수 있음)'}); continue; }
