@@ -346,8 +346,8 @@
     const ix=await loadPre(); if(!ix) { say('HML_DOWNLOAD 폴더를 먼저 연결하세요.'); return; }
     const L=BL.get(), order=((ix.must||[]).map(m=>m.id)).concat(Object.keys(ix.idx)).filter((x,i,a)=>a.indexOf(x)===i);
     const todo=order.filter(id=>{ const e=ix.idx[id], f=e&&e.fix; if(!f) return false; if(opt.onlyApproved&&!f.approved) return false;
-      // 'AI 아직'(규칙 수정만 있고 나머지 지적은 남음)은 일괄에서 뺌. '준비' = 지적 전부에 수정안이 있음(AI 또는 규칙만으로 끝남)
-      const ok=f.state==='준비'&&((f.edits&&f.edits.length)||(f.hml&&f.hml.length)); return ok&&!(L[id]&&/^완료/.test(L[id].st)&&L[id].sig===fixSig(f)); }).slice(0,opt.n);
+      // '준비'와 'AI 아직'(규칙 수정만 먼저 반영, 나머지 지적은 직접) 둘 다 돌림
+      const ok=(/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); return ok&&!(L[id]&&/^완료/.test(L[id].st)&&L[id].sig===fixSig(f)); }).slice(0,opt.n);
     if(!todo.length){ say('돌릴 문항이 없습니다(모두 끝났거나 수정안 없음).'); return; }
     const RR=opt.recheck?await recheckRoot():null;   // 쓰기 권한 묻기는 팝업보다 먼저(클릭 직후여야 함)
     const W=window.open('about:blank','hmlBatchWork','width=1280,height=900'); if(!W){ say('팝업이 막혔습니다. 팝업 허용 후 다시 누르세요.'); return; }
@@ -375,9 +375,9 @@
     const csv='﻿'+rows.map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\r\n');
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='일괄수정_기록.csv'; a.click(); }
   function batchBar(ix){ const el=box()&&box().querySelector('[data-batch]'); if(!el) return; if(!ix){ el.innerHTML=''; return; }
-    const ids=Object.keys(ix.idx).filter(id=>ix.idx[id].fix&&ix.idx[id].fix.state==='준비'); if(!ids.length){ el.innerHTML=''; return; }
+    const ids=Object.keys(ix.idx).filter(id=>ix.idx[id].fix); if(!ids.length){ el.innerHTML=''; return; }
     const L=BL.get(), dn=ids.filter(id=>L[id]&&L[id].st==='완료').length;
-    el.innerHTML='<details style="font-size:12px;margin-top:4px"'+(A.batchBusy?' open':'')+'><summary style="cursor:pointer;color:#e8590c;font-weight:bold">일괄 수정 (돌릴 수 있는 수정안 '+ids.length+'문항 · 완료 '+dn+')</summary><div style="background:#fff;border:1px solid #e8590c;border-radius:6px;padding:6px 8px;margin-top:4px">'+
+    el.innerHTML='<details style="font-size:12px;margin-top:4px"'+(A.batchBusy?' open':'')+'><summary style="cursor:pointer;color:#e8590c;font-weight:bold">일괄 수정 (수정안 '+ids.length+'문항 · 완료 '+dn+')</summary><div style="background:#fff;border:1px solid #e8590c;border-radius:6px;padding:6px 8px;margin-top:4px">'+
       '<div>수정안대로 <b>HTML·HML 수정 → 전체 반영 → 확인 → 승인</b>을 사람 없이 차례로 합니다. 안 맞거나 확인 실패면 그 문항은 건너뛰고, 연속 3번 실패하면 멈춥니다.</div>'+
       '<div style="margin-top:4px">이번에 <input data-bn type="number" min="1" value="'+esc(LS('hmlAi3BatchN')||'5')+'" style="width:56px"> 문항 '+
       '<label><input type="checkbox" data-bap'+(LS('hmlAi3BatchApprove')!=='0'?' checked':'')+'> 승인(사용)까지</label> <label title="고친 문항의 새 HTML을 HML_DOWNLOAD/일괄수정_재검수.json에 모음 → PC에서 python 엄격검사.py 재검수"><input type="checkbox" data-brc'+(LS('hmlAi3BatchRecheck')!=='0'?' checked':'')+'> 재검수 목록 남기기</label> '+(ix.fixApproved?'<label><input type="checkbox" data-bonly'+(LS('hmlAi3BatchOnlyAp')!=='0'?' checked':'')+'> 승인본만</label>':'')+'</div>'+
