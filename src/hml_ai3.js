@@ -195,7 +195,9 @@
   function fixMsg(t,c){ const m=box()&&box().querySelector('[data-fxmsg]'); if(m){ m.textContent=t; m.style.color=c||'#333'; } }
   async function verifyFix(id,edits){ let t=await (await fetch('/item/all/detail.donga'+Q+'itemId='+id,{credentials:'include'})).text();
     t=t.replace(/\\u([0-9a-fA-F]{4})/g,(_,h)=>String.fromCharCode(parseInt(h,16))).replace(/\\\//g,'/').replace(/\\"/g,'"');
-    const ta=document.createElement('textarea'); ta.innerHTML=t; const t2=ta.value, has=s=>t.includes(s)||t2.includes(s), bad=[];
+    const ta=document.createElement('textarea'); ta.innerHTML=t; const t2=ta.value, bad=[];
+    const flat=x=>{ const e=document.createElement('textarea'); e.innerHTML=String(x).replace(/<[^>]*>/g,''); return e.value.replace(/\s+/g,''); }, t3=flat(t2);
+    const has=s=>t.includes(s)||t2.includes(s)||(flat(s)&&t3.includes(flat(s)));   // 태그·띄어쓰기·&기호가 달라도 같은 글이면 있음
     edits.forEach(ed=>{ if(ed.all){ if(!ed.replace.includes(ed.find)&&has(ed.find)) bad.push('남아 있음: '+ed.find.slice(0,30)); } else if(!ed.replace.includes(ed.find)&&has(ed.find)&&!has(ed.replace)) bad.push('안 바뀜: '+ed.find.slice(0,30)); });
     return bad; }
 
@@ -364,10 +366,10 @@
     const L=BL.get(), order=((ix.must||[]).map(m=>m.id)).concat(Object.keys(ix.idx)).filter((x,i,a)=>a.indexOf(x)===i);
     const todo=order.filter(id=>{ const e=ix.idx[id], f=e&&e.fix; if(!f) return false; if(opt.onlyApproved&&!f.approved) return false;
       // '준비'와 'AI 아직'(규칙 수정만 먼저 반영, 나머지 지적은 직접) 둘 다 돌림
-      const ok=(/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); return ok&&!(L[id]&&/^완료/.test(L[id].st)&&(!L[id].sig||L[id].sig===fixSig(f))); });   // 완료(예전 기록은 서명 없음)는 건너뜀, 수정안이 바뀐 것만 다시
+      const ok=(/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); return ok&&!(L[id]&&/^(완료|반영)/.test(L[id].st)); });   // 이미 반영한 문항(완료·반영 확인 필요)은 수정안이 바뀌어도 다시 안 돌림
     const all=todo.length, failed=todo.filter(id=>L[id]), fresh=todo.filter(id=>!L[id]);
     todo.length=0; todo.push(...fresh.concat(failed).slice(0,opt.n));   // 처음 하는 문항 먼저, 전에 건너뛴 문항은 뒤에
-    const doneN=Object.keys(L).filter(id=>/^완료/.test(L[id].st)).length;
+    const doneN=Object.keys(L).filter(id=>/^(완료|반영)/.test(L[id].st)).length;
     if(!todo.length){ say('돌릴 문항이 없습니다(모두 끝났거나 수정안 없음).'); return; }
     const RR=opt.recheck?await recheckRoot():null;   // 쓰기 권한 묻기는 팝업보다 먼저(클릭 직후여야 함)
     const W=window.open('about:blank','hmlBatchWork','width=1280,height=900'); if(!W){ say('팝업이 막혔습니다. 팝업 허용 후 다시 누르세요.'); return; }
@@ -379,7 +381,7 @@
       try{ const t=await batchOne(W,id,f,opt,x=>say('['+(i+1)+'/'+todo.length+'] '+x),det); await fin(); L[id]={st:'완료',msg:t,at:Date.now(),sig:fixSig(f)}; ok++; fails=0;
         if(RR) try{ await recheckAdd(RR,id,ix); }catch(er){ L[id].msg+=' · 재검수 목록 못 씀: '+er.message; }
         const d=doneMap(); d[id]=Date.now(); LS('hmlAi3MustDone',JSON.stringify(d)); const FL=FX.log(); FL[id]=Object.assign(FL[id]||{},{st:'반영',at:Date.now()}); FX.saveLog(FL); }
-      catch(er){ if(er.applied) await fin(); L[id]={st:er.applied?'반영(확인 필요)':'건너뜀',msg:er.message,at:Date.now()}; bad++; fails++;
+      catch(er){ if(er.applied) await fin(); L[id]={st:er.applied?'반영(확인 필요)':'건너뜀',msg:er.message,at:Date.now()}; bad++; if(!er.applied) fails++;   // 반영은 된 문항(확인만 필요)은 연속 실패로 안 셈
         if(er.stop){ BL.set(L); say('멈춤: '+er.message); break; }
         if(fails>=3){ BL.set(L); say('연속 3번 실패해서 멈춤. 마지막: '+id+' '+er.message); break; } }
       BL.set(L); }
@@ -397,8 +399,8 @@
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='일괄수정_기록.csv'; a.click(); }
   function batchBar(ix){ const el=box()&&box().querySelector('[data-batch]'); if(!el) return; if(!ix){ el.innerHTML=''; return; }
     const ids=Object.keys(ix.idx).filter(id=>ix.idx[id].fix); if(!ids.length){ el.innerHTML=''; return; }
-    const L=BL.get(), dn=ids.filter(id=>L[id]&&L[id].st==='완료').length;
-    const can=ids.filter(id=>{ const f=ix.idx[id].fix; return (/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); }), left=can.filter(id=>!(L[id]&&L[id].st==='완료')).length;
+    const L=BL.get(), dn=ids.filter(id=>L[id]&&/^(완료|반영)/.test(L[id].st)).length;
+    const can=ids.filter(id=>{ const f=ix.idx[id].fix; return (/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); }), left=can.filter(id=>!(L[id]&&/^(완료|반영)/.test(L[id].st))).length;
     el.innerHTML='<details style="font-size:12px;margin-top:4px"'+(A.batchBusy?' open':'')+'><summary style="cursor:pointer;color:#e8590c;font-weight:bold">일괄 수정 (고칠 문항 '+can.length+' · 남은 '+left+' · 완료 '+dn+' · 수정안 없음 '+(ids.length-can.length)+')</summary><div style="background:#fff;border:1px solid #e8590c;border-radius:6px;padding:6px 8px;margin-top:4px">'+
       '<div>수정안대로 <b>HTML·HML 수정 → 전체 반영 → 확인 → 승인</b>을 사람 없이 차례로 합니다. 안 맞거나 확인 실패면 그 문항은 건너뛰고, 연속 3번 실패하면 멈춥니다.</div>'+
       '<div style="margin-top:4px">이번에 <input data-bn type="number" min="1" value="'+esc(LS('hmlAi3BatchN')||'5')+'" style="width:56px"> 문항 '+
