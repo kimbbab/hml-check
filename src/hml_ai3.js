@@ -309,9 +309,13 @@
   // 연속 3번 실패하면 멈춤. 기록은 localStorage 'hmlAi3BatchLog'(이어하기·CSV). 한 번에 몇 문항만 돌릴지 정함(처음엔 5).
   const BL={ get:()=>{ try{ return JSON.parse(LS('hmlAi3BatchLog')||'{}'); }catch(e){ return {}; } }, set:v=>LS('hmlAi3BatchLog',JSON.stringify(v)) };
   // 새 문서가 열렸는지는 document가 바뀌었는지로 봄(빈 창(about:blank)에서 처음 열 때는 window가 그대로 재사용돼 표시를 못 씀)
-  async function navTo(W,url,ready,what){ let od=null; try{ od=W.document; }catch(e){} W.location.href=url;
-    return waitFor(()=>{ let fresh=false; try{ fresh=W.document!==od&&W.document.readyState!=='loading'&&String(W.location.href).includes(url); }catch(e){ return null; }
-      if(fresh&&/login/i.test(W.location.pathname)) throw Object.assign(new Error('CMS 로그인이 풀림'),{stop:1}); return fresh&&ready(W); },60000,what); }
+  async function navTo(W,url,ready,what){ let od=null; try{ od=W.document; }catch(e){} W.location.href=url; let t1=Date.now(), tries=1;
+    return waitFor(()=>{ let doc,href; try{ doc=W.document; href=String(W.location.href); }catch(e){ return null; }
+      const fresh=doc!==od&&doc.readyState!=='loading';
+      if(fresh&&/login/i.test(W.location.pathname)) throw Object.assign(new Error('CMS 로그인이 풀림'),{stop:1,hard:1});
+      // 다른 화면에 내려앉음(앞 문항 저장이 늦게 끝나 그 상세로 끌려감 등) → 3초 뒤 다시 이동(최대 4번)
+      if(fresh&&!href.includes(url)){ if(Date.now()-t1>3000&&tries<4){ od=doc; t1=Date.now(); tries++; W.location.href=url; } return null; }
+      return fresh&&ready(W); },60000,what); }
   // 수정 내역(지우지 않고 계속 쌓임, IndexedDB 'batchDetail'): 문항마다 무엇을 → 무엇으로 바꿨는지
   async function detailAdd(rows){ if(!rows.length) return; try{ const cur=(await kvGet('batchDetail'))||[]; cur.push(...rows); await kvPut('batchDetail',cur); }catch(e){} }
   async function detailCsv(){ const D=(await kvGet('batchDetail').catch(()=>null))||[];
@@ -323,7 +327,9 @@
     step('수정 화면 여는 중');
     try{ await navTo(W,'/item/all/modify.donga'+Q+'itemId='+id,w=>w.document.querySelector('[data-editor-url]')&&typeof w.itemApplyAll==='function'&&jsonEls(w).length,'수정 화면'); }
     catch(er){ if(er.stop) throw er; let d=''; try{ d=' [주소 '+W.location.pathname+W.location.search+' · 상태 '+W.document.readyState+' · 한글편집기 '+(W.document.querySelector('[data-editor-url]')?'O':'X')+' · 전체반영 '+(typeof W.itemApplyAll)+' · 문서 '+jsonEls(W).length+']'; }catch(e){ d=' [작업 창을 읽지 못함]'; }
-      throw Object.assign(new Error(er.message+d),{stop:1}); }   // 화면 감지가 안 되면 다음 문항도 같을 것이라 바로 멈춤
+      let onMod=false; try{ onMod=/modify\.donga/.test(W.location.pathname)&&String(W.location.search).includes('itemId='+id); }catch(e){}
+      if(!onMod) throw new Error('수정 화면이 안 열림(다른 화면으로 감)'+d);   // 이 문항만 건너뜀
+      throw Object.assign(new Error(er.message+d),{stop:1}); }   // 수정 화면인데 감지가 안 되면 다음 문항도 같을 것이라 바로 멈춤
     await nap(500);
     if(mounted(W)) throw new Error('HTML 편집기가 먼저 열려 있음');
     const r=pasteDocs(f.edits||[],W); if(!r.ok) throw new Error('HTML 수정안 안 맞음: '+r.rep.filter(x=>!x.ok).map(x=>(x.ed.field||'')+' '+x.msg).join(' / '));
@@ -346,7 +352,8 @@
     const modal=W.document.getElementById('applyAllModal');
     try{ await waitFor(()=>modal&&modal.classList.contains('show'),6000,'반영 확인창'); }catch(er){ throw new Error('전체 반영 막힘: '+(toastOf(W)||'필수 항목·정답 등')); }
     await nap(300); modal.querySelector('[data-action-ok]').click();
-    await waitFor(()=>{ let gone=false; try{ gone=W.document!==od&&W.document.readyState!=='loading'; }catch(e){} return gone; },90000,'반영 저장');
+    try{ await waitFor(()=>{ let gone=false; try{ gone=W.document!==od&&W.document.readyState!=='loading'; }catch(e){} return gone; },180000,'반영 저장'); }
+    catch(er){ throw Object.assign(new Error('반영 저장이 3분 넘게 안 끝남(저장됐는지 확인 필요)'),{applied:1}); }
     if(/modify\.donga/.test(W.location.pathname)) throw new Error('반영 뒤에도 수정 화면에 머묾: '+toastOf(W));
     const bad=await verifyFix(id,f.edits||[]).catch(er=>['확인 못함: '+er.message]); if(bad.length) throw Object.assign(new Error('반영했지만 확인 필요: '+bad.join('; ')),{applied:1});
     if(opt.approve) await approve();
