@@ -416,13 +416,147 @@
     setField(f.answer,sp.answer,W); if(sp.suffix&&f.suffix) setField(f.suffix,sp.suffix,W);
     const ok=!!String(fieldVal(f.answer)).trim(); return {ok,msg:'OMR 정답 '+sp.answer+(sp.suffix?', 뒤 수식어 '+sp.suffix:'')+(ok?' 넣음':' 넣기 실패 → OMR 수정 탭에서 직접 입력')}; }
 
+
+  // ---------- 그림 키우기: 지금 문항 HTML의 <img>를 한 번에 키움(미리보기 → 넣기 → 반영 / 되돌리기=새로고침) ----------
+  // 수정안 붙여넣기와 같은 원리: [HTML 수정] 편집기가 만들어지기 전에 문항 JSON 안의 그림 크기를 바꿈.
+  const IMG_RE = /<img\b[^>]*>/gi;
+
+  // 문항 문서 JSON들(<script type="application/json">)
+  function hmlJsonEls(W = window) {
+    return [...W.document.querySelectorAll('script[type="application/json"]')]
+      .filter(el => /Html"|"content"/.test(el.textContent));
+  }
+  // 문자열 값을 모두 같은 순서로 돌기
+  function hmlWalk(o, path, fn) {
+    Object.keys(o || {}).forEach(k => {
+      const v = o[k], p = path.concat(k);
+      if (typeof v === 'string') fn(o, k, v, p);
+      else if (v && typeof v === 'object') hmlWalk(v, p, fn);
+    });
+  }
+  // 그림의 실제 폭(px) 알아내기: 이미지 파일을 불러와 naturalWidth
+  function hmlNatural(src, W = window) {
+    return new Promise(ok => {
+      const im = new W.Image(); const t = setTimeout(() => ok(null), 8000);
+      im.onload = () => { clearTimeout(t); ok({ w: im.naturalWidth, h: im.naturalHeight }); };
+      im.onerror = () => { clearTimeout(t); ok(null); };
+      im.src = src;
+    });
+  }
+  const num = s => { const m = String(s || '').match(/^\s*(\d+(?:\.\d+)?)\s*(px)?\s*$/i); return m ? +m[1] : null; };
+  const attr = (tag, a) => { const m = tag.match(new RegExp('\\s' + a + '\\s*=\\s*("([^"]*)"|\'([^\']*)\'|([^\\s>]+))', 'i')); return m ? (m[2] ?? m[3] ?? m[4]) : null; };
+  const styleOf = (tag, prop) => { const s = attr(tag, 'style') || ''; const m = s.match(new RegExp('(?:^|;)\\s*' + prop + '\\s*:\\s*([^;]+)', 'i')); return m ? m[1].trim() : null; };
+
+  // <img> 태그 하나의 폭을 nw로 (높이가 적혀 있으면 같은 비율로)
+  function hmlResizeTag(tag, cur, nw) {
+    const r = nw / cur, sc = v => Math.round(v * r);
+    let t = tag;
+    // width / height 속성
+    if (attr(t, 'width') != null) t = t.replace(/(\swidth\s*=\s*)("[^"]*"|'[^']*'|[^\s>]+)/i, '$1"' + nw + '"');
+    else t = t.replace(/^<img\b/i, '<img width="' + nw + '"');
+    const ha = num(attr(t, 'height'));
+    if (ha != null) t = t.replace(/(\sheight\s*=\s*)("[^"]*"|'[^']*'|[^\s>]+)/i, '$1"' + sc(ha) + '"');
+    // style의 width / height / max-width
+    let st = attr(t, 'style');
+    if (st == null) t = t.replace(/^<img\b/i, '<img style="width:' + nw + 'px"');
+    else {
+      let s = st;
+      s = /(^|;)\s*width\s*:/i.test(s) ? s.replace(/((?:^|;)\s*width\s*:\s*)[^;]+/i, '$1' + nw + 'px') : s.replace(/;?\s*$/, ';') + 'width:' + nw + 'px';
+      s = s.replace(/((?:^|;)\s*height\s*:\s*)(\d+(?:\.\d+)?)px/i, (_, a, h) => a + sc(+h) + 'px');
+      s = s.replace(/((?:^|;)\s*max-width\s*:\s*)(\d+(?:\.\d+)?)px/i, (_, a, m) => a + Math.max(+m, nw) + 'px');
+      t = t.replace(/(\sstyle\s*=\s*)("[^"]*"|'[^']*')/i, (_, a, q) => a + q[0] + s.replace(new RegExp(q[0], 'g'), '') + q[0]);
+    }
+    return t;
+  }
+
+  // 1) 미리보기: 무엇을 얼마나 키울지 목록만 만듦(화면·JSON 안 바꿈)
+  //   scale: 배율, maxWidth: 이보다 크게는 안 키움(px), minWidth: 이보다 작은 그림(기호·아이콘)은 건너뜀
+  async function hmlImgPlan(opt = {}, W = window) {
+    const o = Object.assign({ scale: 1.5, maxWidth: 640, minWidth: 30 }, opt);
+    if (Object.keys(W.itemEditors || {}).some(k => W.itemEditors[k]))
+      throw new Error('[HTML 수정] 편집기가 이미 열려 있음 → 새로고침 후 탭을 열기 전에 실행');
+    const els = jsonEls(W); if (!els.length) throw new Error('문항 JSON을 찾지 못함(수정 화면인지 확인)');
+    const docs = els.map(el => { try { return JSON.parse(el.textContent); } catch (e) { return null; } });
+    const list = [];
+    docs.forEach((d, di) => d && hmlWalk(d, [], (obj, k, v, p) => {
+      (v.match(IMG_RE) || []).forEach(tag => list.push({ di, field: p.join('.'), tag, src: attr(tag, 'src') || '' }));
+    }));
+    for (const x of list) {
+      const sw = styleOf(x.tag, 'width');
+      if (sw && /%/.test(sw)) { x.skip = '% 크기'; continue; }
+      x.cur = num(sw) || num(attr(x.tag, 'width'));
+      if (!x.cur) { const n = await hmlNatural(x.src, W); x.cur = n && n.w; x.natural = true; }
+      if (!x.cur) { x.skip = '크기를 알 수 없음'; continue; }
+      if (x.cur < o.minWidth) { x.skip = '작은 그림(기호)'; continue; }
+      x.nw = Math.min(o.maxWidth, Math.round(x.cur * o.scale));
+      if (x.nw <= x.cur) { x.skip = '이미 충분히 큼'; continue; }
+      x.newTag = hmlResizeTag(x.tag, x.cur, x.nw); x.on = true;
+    }
+    return { els, list, opt: o };
+  }
+
+  // 2) 넣기: plan에서 on인 그림만 바꿔 JSON에 넣고 [HTML 수정] 탭을 열어 보여 줌. 바꾸기 전 글을 돌려줌
+  function hmlImgApply(plan, W = window) {
+    const docs = plan.els.map(el => { try { return JSON.parse(el.textContent); } catch (e) { return null; } });
+    let c = 0, n = 0;
+    docs.forEach((d, di) => d && hmlWalk(d, [], (obj, k, v) => {
+      if (!/<img\b/i.test(v)) return;
+      obj[k] = v.replace(IMG_RE, t => { const x = plan.list[c++]; if (x && x.on && x.di === di && x.tag === t) { n++; return x.newTag; } return t; });
+    }));
+    const before = plan.els.map(el => el.textContent);
+    plan.els.forEach((el, i) => { if (docs[i]) el.textContent = JSON.stringify(docs[i]); });
+    const tab = [...W.document.querySelectorAll('.nav-link,[role=tab],button,a')].find(b => b.textContent.trim() === 'HTML 수정');
+    if (tab) tab.click();
+    return { changed: n, before };
+  }
+  const IM={};
+  function imgMsg(t,c){ const m=box()&&box().querySelector('[data-immsg]'); if(m){ m.textContent=t; m.style.color=c||'#333'; } }
+  function imgBar(id){ const el=box()&&box().querySelector('[data-img]'); if(!el) return;
+    const sc=LS('hmlImgScale')||'1.5', mx=LS('hmlImgMax')||'640';
+    el.innerHTML='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px;padding:4px 6px;border:1px solid #c5a3d9;border-radius:6px;background:#fff">'+
+      '<b style="color:#7b1fa2">그림</b><select data-isc title="배율">'+['1.25','1.5','1.75','2','2.5'].map(v=>'<option'+(v===sc?' selected':'')+'>'+v+'</option>').join('')+'</select>배 · 최대 <input data-imx type="number" min="100" step="20" value="'+esc(mx)+'" style="width:58px">px '+
+      '<button data-ipre style="background:#7b1fa2;color:#fff;border:0;border-radius:4px;padding:2px 8px;font-weight:bold" title="이 문항 그림을 얼마나 키울지 미리 봄(아직 안 바꿈)">그림 키우기</button><span style="flex:1"></span>'+
+      (IM.done===id?'<button data-iapply style="background:#1a73e8;color:#fff;border:0;border-radius:4px;padding:2px 8px;font-weight:bold" title="CMS [전체 반영]으로 저장">반영</button><button data-iundo title="반영 전이면 새로고침해서 원래대로">되돌리기</button>':'')+
+      '</div><div data-immsg style="font-size:12px;margin-top:2px"></div><div data-imlist></div>';
+    const $=q=>el.querySelector(q);
+    $('[data-isc]').onchange=e=>LS('hmlImgScale',e.target.value); $('[data-imx]').onchange=e=>LS('hmlImgMax',e.target.value);
+    $('[data-ipre]').onclick=()=>imgPreview(id);
+    const ap=$('[data-iapply]'); if(ap) ap.onclick=()=>imgApplyAll(id);
+    const un=$('[data-iundo]'); if(un) un.onclick=()=>{ history.replaceState(null,'',location.pathname+location.search); location.reload(); };
+    if(location.hash==='#hmlImg'){ history.replaceState(null,'',location.pathname+location.search); setTimeout(()=>imgPreview(id),500); } }
+  async function imgPreview(id){
+    if(!isModify()||loadedId()!==String(id)){ location.href='/item/all/modify.donga'+Q+'itemId='+id+'#hmlImg'; return; }
+    if(mounted()){ history.replaceState(null,'',location.pathname+location.search+'#hmlImg'); location.reload(); return; }
+    const L=box()&&box().querySelector('[data-imlist]'); imgMsg('그림 크기 재는 중…');
+    let plan; try{ plan=await hmlImgPlan({scale:+(LS('hmlImgScale')||1.5),maxWidth:+(LS('hmlImgMax')||640)}); }catch(er){ imgMsg(er.message,'#d93025'); return; }
+    IM.plan=plan; IM.id=id; const on=plan.list.filter(x=>x.on);
+    if(!plan.list.length){ imgMsg('이 문항 HTML에는 그림이 없습니다.'); L.innerHTML=''; return; }
+    const fld=f=>/explan/i.test(f)?'해설':/choice/i.test(f)?'선지':/correct|answer/i.test(f)?'정답':/passage/i.test(f)?'지문':/question|prompt/i.test(f)?'문제':f;
+    L.innerHTML=plan.list.map((x,i)=>'<div style="border-top:1px dashed #ddd;padding:3px 0;font-size:12px"><label><input type="checkbox" data-ion="'+i+'"'+(x.on?' checked':' disabled')+'> <b>'+esc(fld(x.field))+'</b> '+
+      (x.on?x.cur+(x.natural?'(원래 크기)':'')+' → <b>'+x.nw+'px</b>':'<span style="color:#888">건너뜀: '+esc(x.skip)+(x.cur?' ('+x.cur+'px)':'')+'</span>')+'</label>'+
+      '<div style="overflow:auto"><img src="'+esc(x.src)+'" style="width:'+(x.on?x.nw:(x.cur||80))+'px;max-width:none;border:1px solid #ccc;display:block;margin-top:2px"></div></div>').join('')+
+      (on.length?'<div style="margin-top:4px"><button data-iput style="background:#188038;color:#fff;border:0;border-radius:4px;padding:3px 10px;font-weight:bold">이대로 넣기</button> <button data-icancel>취소</button></div>':'');
+    L.querySelectorAll('[data-ion]').forEach(c=>c.onchange=()=>{ plan.list[+c.dataset.ion].on=c.checked; });
+    const put=L.querySelector('[data-iput]'); if(put) put.onclick=()=>imgPut(id);
+    const cc=L.querySelector('[data-icancel]'); if(cc) cc.onclick=()=>{ L.innerHTML=''; imgMsg(''); };
+    imgMsg(on.length?'그림 '+on.length+'개를 키웁니다(아래는 바뀔 크기). 아직 CMS에는 아무것도 안 바뀜.':'키울 그림이 없습니다.',on.length?'#333':'#b06000'); }
+  function imgPut(id){ const plan=IM.plan; if(!plan||IM.id!==id) return;
+    if(mounted()){ imgMsg('편집기가 이미 열렸습니다. [그림 키우기]를 다시 누르세요.','#d93025'); return; }
+    const r=hmlImgApply(plan); IM.done=id; imgBar(id);
+    imgMsg('그림 '+r.changed+'개 넣음. [HTML 수정] 탭에서 확인하고 [반영]. 마음에 안 들면 [되돌리기](새로고침, 저장 안 됨).',r.changed?'#188038':'#d93025'); }
+  async function imgApplyAll(id){ if(IM.done!==id||!isModify()){ imgMsg('먼저 [그림 키우기] → [이대로 넣기].','#d93025'); return; }
+    if(typeof window.itemApplyAll!=='function'){ imgMsg('전체 반영 기능을 찾지 못했습니다.','#d93025'); return; }
+    imgMsg('전체 반영 중…'); window.itemApplyAll(); const modal=document.getElementById('applyAllModal');
+    try{ await waitFor(()=>modal&&modal.classList.contains('show'),5000,'확인창'); }catch(er){ imgMsg('전체 반영이 막혔습니다(필수 항목·OMR 정답 등). 화면 안내를 확인하세요.','#d93025'); return; }
+    await new Promise(r=>setTimeout(r,300)); modal.querySelector('[data-action-ok]').click(); }
+
   // ---------- 칸 그리기 ----------
   const opt=()=>({model:LS('hmlAi3Model')||'claude-haiku-5-5',solve:LS('hmlAi3Solve')!=='0',meta:LS('hmlAi3Meta')!=='0',auto:LS('hmlAi3Auto')==='1'});
   function box(){ const p=panelEl(); if(!p) return null; let b=p.querySelector('[data-ai3]'); if(b) return b;
     const body=p.querySelector('[data-b]'); if(!body) return null; const o=opt();
     b=document.createElement('div'); b.setAttribute('data-ai3','');
     b.style.cssText='border-bottom:1px solid #ddd;background:#f8f3fb;padding:6px 10px;font-size:13px;max-height:55%;overflow:auto;flex:none;position:relative';
-    b.innerHTML='<div data-st style="margin-bottom:4px"></div><div data-pre></div><div data-batch></div>'+
+    b.innerHTML='<div data-st style="margin-bottom:4px"></div><div data-pre></div><div data-img></div><div data-batch></div>'+
       '<style>[data-ai3] details[open]{flex-basis:100%}[data-ai3] details summary{text-align:right}</style><div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px"><button data-go title="HML 캡처와 HTML을 AI가 다시 비교(API 비용)" style="border:0;padding:3px 10px;border-radius:4px;color:#fff;background:#7b1fa2;cursor:pointer">AI 다시 검사</button><span style="flex:1"></span>'+
       '<details style="font-size:12px;margin-left:auto"><summary style="cursor:pointer;color:#666">설정</summary><div style="background:#fff;border:1px solid #ccc;border-radius:6px;padding:6px 8px;margin-top:4px"><div data-preset></div>'+
       '<div style="margin-top:4px;border-top:1px dashed #ddd;padding-top:4px"><b>AI 검사</b> <select data-model title="모델"><option value="claude-haiku-5-5">Haiku 5.5 (빠름·저렴)</option><option value="claude-sonnet-5-5">Sonnet 5.5 (정확)</option></select> '+
@@ -472,7 +606,7 @@
   // ---------- 바로 검사 칸이 생기거나 문항이 바뀌면 붙이기 ----------
   let lastId=null, tm=null;
   function tick(){ if(window.name==='hmlBatchWork') return; if(!box()) return; const id=itemIdOf(); if(K().busy) return;
-    if(id!==lastId){ lastId=id; showPre(id).catch(()=>{}); if(A.cache[id]) render(id,A.cache[id]); else if(opt().auto) run(); else out(''); } }
+    if(id!==lastId){ lastId=id; IM.done=null; imgBar(id); showPre(id).catch(()=>{}); if(A.cache[id]) render(id,A.cache[id]); else if(opt().auto) run(); else out(''); } }
   if(!A.obs){ A.obs=new MutationObserver(()=>{ clearTimeout(tm); tm=setTimeout(tick,600); });   A.obs.observe(document.body,{childList:true,subtree:true}); }
   if(!A.pendChecked&&window.name!=='hmlBatchWork'){ A.pendChecked=true; loadPre().then(ix=>checkPending(ix)).catch(()=>{}); }
   tick();
