@@ -312,7 +312,13 @@
   async function navTo(W,url,ready,what){ let od=null; try{ od=W.document; }catch(e){} W.location.href=url;
     return waitFor(()=>{ let fresh=false; try{ fresh=W.document!==od&&W.document.readyState!=='loading'&&String(W.location.href).includes(url); }catch(e){ return null; }
       if(fresh&&/login/i.test(W.location.pathname)) throw Object.assign(new Error('CMS 로그인이 풀림'),{stop:1}); return fresh&&ready(W); },60000,what); }
-  async function batchOne(W,id,f,opt,say){
+  // 수정 내역(지우지 않고 계속 쌓임, IndexedDB 'batchDetail'): 문항마다 무엇을 → 무엇으로 바꿨는지
+  async function detailAdd(rows){ if(!rows.length) return; try{ const cur=(await kvGet('batchDetail'))||[]; cur.push(...rows); await kvPut('batchDetail',cur); }catch(e){} }
+  async function detailCsv(){ const D=(await kvGet('batchDetail').catch(()=>null))||[];
+    const rows=[['시각','문항ID','시험지','번호','구분','칸','고치기 전','고친 뒤','비고']].concat(D.map(r=>[new Date(r.at).toLocaleString('ko-KR'),r.id,r.sname||r.sid||'',r.no||'',r.kind,r.field||'',r.from||'',r.to||'',r.note||'']));
+    const csv='\ufeff'+rows.map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='일괄수정_내역_'+new Date().toISOString().slice(0,10)+'.csv'; a.click(); return D.length; }
+  async function batchOne(W,id,f,opt,say,det){ det=det||[]; const at=Date.now(), add=(kind,field,from,to,note)=>det.push({at,id:String(id),kind,field,from,to,note});
     const t0=Date.now(), step=t=>say(id+': '+t+' ('+Math.round((Date.now()-t0)/1000)+'초)');
     step('수정 화면 여는 중');
     try{ await navTo(W,'/item/all/modify.donga'+Q+'itemId='+id,w=>w.document.querySelector('[data-editor-url]')&&typeof w.itemApplyAll==='function'&&jsonEls(w).length,'수정 화면'); }
@@ -323,12 +329,16 @@
     const r=pasteDocs(f.edits||[],W); if(!r.ok) throw new Error('HTML 수정안 안 맞음: '+r.rep.filter(x=>!x.ok).map(x=>(x.ed.field||'')+' '+x.msg).join(' / '));
     let om=null; try{ om=await fillOmr(W); }catch(er){ om={ok:false,msg:er.message}; } if(om&&!om.ok) throw new Error('OMR: '+om.msg);
     const htmlCh=r.rep.some(x=>!x.already), omrCh=!!(om&&om.ok&&!om.skip), already=r.rep.filter(x=>x.already).length;
+    r.rep.forEach(x=>{ if(!x.already) add('HTML',x.ed.field||'',x.ed.find,x.ed.replace,x.ed.src||''); });
+    if(omrCh) add('OMR','정답','(빈칸)',om.msg||'',om.warn?'확인 필요':'');
     let hdone=[]; if(f.hml&&f.hml.length){ step('HML 고치는 중'); const ed=openHwp(W); if(!ed) throw Object.assign(new Error('편집기 팝업이 막힘 → 이 사이트 팝업 허용'),{stop:1});
-      try{ hdone=await hmlRun(ed,f.hml,t=>step(t),W); }catch(er){ try{ ed.close(); }catch(x){} throw new Error('HML: '+er.message); } }
+      try{ hdone=await hmlRun(ed,f.hml,t=>step(t),W); }catch(er){ try{ ed.close(); }catch(x){} throw new Error('HML: '+er.message); }
+      f.hml.filter(h=>hdone.includes(h.slot)&&!h._done).forEach(h=>add('HML',(HSLOT[h.slot]||h.slot)+(h.eq!=null?' 수식':' 글자'),h.eq!=null?h.eq:h.text,h.to,h.why||'')); }
     let ap='';
     const approve=async()=>{ step('승인 중');
       if(!isDetail(W)||!String(W.location.search).includes('itemId='+id)) await navTo(W,'/item/all/detail.donga'+Q+'itemId='+id,w=>w.document.getElementById('statusFields')&&w.document.querySelector('[data-status-save]'),'상세 화면');
-      try{ ap=await approveIn(W); }catch(er){ throw Object.assign(new Error('반영됨, 승인 실패: '+er.message),{applied:1}); } };
+      try{ ap=await approveIn(W); }catch(er){ throw Object.assign(new Error('반영됨, 승인 실패: '+er.message),{applied:1}); }
+      if(!/이미/.test(ap)) add('승인','상태','',ap,''); };
     if(!htmlCh&&!omrCh&&!hdone.length){   // 바꿀 것이 없음 = 이미 고쳐진 문항 → 반영 없이(승인만) 넘어감
       if(opt.approve) await approve();
       return '이미 수정됨(반영 안 함)'+(ap?' · '+ap:''); }
@@ -358,10 +368,11 @@
     A.batchStop=false; A.batchBusy=true; let fails=0, ok=0, bad=0;
     for(let i=0;i<todo.length;i++){ if(A.batchStop){ say('멈춤(사용자). '+ok+' 완료 · '+bad+' 건너뜀'); break; }
       const id=todo[i], f=ix.idx[id].fix; say('['+(i+1)+'/'+todo.length+'] '+id+' (이미 완료 '+doneN+' 건너뜀 · 남은 '+all+')');
-      try{ const t=await batchOne(W,id,f,opt,x=>say('['+(i+1)+'/'+todo.length+'] '+x)); L[id]={st:'완료',msg:t,at:Date.now(),sig:fixSig(f)}; ok++; fails=0;
+      const det=[], e0=ix.idx[id]||{}, fin=async()=>{ det.forEach(r=>{ r.sid=e0.sid; r.sname=e0.sname; r.no=e0.no; }); await detailAdd(det); };
+      try{ const t=await batchOne(W,id,f,opt,x=>say('['+(i+1)+'/'+todo.length+'] '+x),det); await fin(); L[id]={st:'완료',msg:t,at:Date.now(),sig:fixSig(f)}; ok++; fails=0;
         if(RR) try{ await recheckAdd(RR,id,ix); }catch(er){ L[id].msg+=' · 재검수 목록 못 씀: '+er.message; }
         const d=doneMap(); d[id]=Date.now(); LS('hmlAi3MustDone',JSON.stringify(d)); const FL=FX.log(); FL[id]=Object.assign(FL[id]||{},{st:'반영',at:Date.now()}); FX.saveLog(FL); }
-      catch(er){ L[id]={st:er.applied?'반영(확인 필요)':'건너뜀',msg:er.message,at:Date.now()}; bad++; fails++;
+      catch(er){ if(er.applied) await fin(); L[id]={st:er.applied?'반영(확인 필요)':'건너뜀',msg:er.message,at:Date.now()}; bad++; fails++;
         if(er.stop){ BL.set(L); say('멈춤: '+er.message); break; }
         if(fails>=3){ BL.set(L); say('연속 3번 실패해서 멈춤. 마지막: '+id+' '+er.message); break; } }
       BL.set(L); }
@@ -380,11 +391,12 @@
   function batchBar(ix){ const el=box()&&box().querySelector('[data-batch]'); if(!el) return; if(!ix){ el.innerHTML=''; return; }
     const ids=Object.keys(ix.idx).filter(id=>ix.idx[id].fix); if(!ids.length){ el.innerHTML=''; return; }
     const L=BL.get(), dn=ids.filter(id=>L[id]&&L[id].st==='완료').length;
-    el.innerHTML='<details style="font-size:12px;margin-top:4px"'+(A.batchBusy?' open':'')+'><summary style="cursor:pointer;color:#e8590c;font-weight:bold">일괄 수정 (수정안 '+ids.length+'문항 · 완료 '+dn+')</summary><div style="background:#fff;border:1px solid #e8590c;border-radius:6px;padding:6px 8px;margin-top:4px">'+
+    const can=ids.filter(id=>{ const f=ix.idx[id].fix; return (/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); }), left=can.filter(id=>!(L[id]&&L[id].st==='완료')).length;
+    el.innerHTML='<details style="font-size:12px;margin-top:4px"'+(A.batchBusy?' open':'')+'><summary style="cursor:pointer;color:#e8590c;font-weight:bold">일괄 수정 (고칠 문항 '+can.length+' · 남은 '+left+' · 완료 '+dn+' · 수정안 없음 '+(ids.length-can.length)+')</summary><div style="background:#fff;border:1px solid #e8590c;border-radius:6px;padding:6px 8px;margin-top:4px">'+
       '<div>수정안대로 <b>HTML·HML 수정 → 전체 반영 → 확인 → 승인</b>을 사람 없이 차례로 합니다. 안 맞거나 확인 실패면 그 문항은 건너뛰고, 연속 3번 실패하면 멈춥니다.</div>'+
       '<div style="margin-top:4px">이번에 <input data-bn type="number" min="1" value="'+esc(LS('hmlAi3BatchN')||'5')+'" style="width:56px"> 문항 '+
       '<label><input type="checkbox" data-bap'+(LS('hmlAi3BatchApprove')!=='0'?' checked':'')+'> 승인(사용)까지</label> <label title="고친 문항의 새 HTML을 HML_DOWNLOAD/일괄수정_재검수.json에 모음 → PC에서 python 엄격검사.py 재검수"><input type="checkbox" data-brc'+(LS('hmlAi3BatchRecheck')!=='0'?' checked':'')+'> 재검수 목록 남기기</label> '+(ix.fixApproved?'<label><input type="checkbox" data-bonly'+(LS('hmlAi3BatchOnlyAp')!=='0'?' checked':'')+'> 승인본만</label>':'')+'</div>'+
-      '<div style="margin-top:4px"><button data-bgo style="background:#e8590c;color:#fff;border:0;border-radius:4px;padding:3px 10px;font-weight:bold">일괄 시작</button> <button data-bstop>멈춤</button> <button data-bcsv>기록 CSV</button> <button data-bclr title="기록을 지우면 다시 돌림">기록 지우기</button></div>'+
+      '<div style="margin-top:4px"><button data-bgo style="background:#e8590c;color:#fff;border:0;border-radius:4px;padding:3px 10px;font-weight:bold">일괄 시작</button> <button data-bstop>멈춤</button> <button data-bcsv>기록 CSV</button> <button data-bdet title="일괄로 바꾼 내용(문항·칸·고치기 전→후·OMR·HML·승인)을 모두 엑셀(CSV)로. 기록 지우기를 해도 남음">수정 내역 엑셀</button> <button data-bclr title="기록을 지우면 다시 돌림">기록 지우기</button></div>'+
       '<div data-bmsg style="margin-top:4px;color:#333"></div><div style="color:#888">처음엔 5문항으로 돌리고 CMS에서 결과를 확인한 뒤 늘리세요. 작업 창은 닫지 마세요(가려도 됨).</div></div></details>';
     const $=q=>el.querySelector(q);
     $('[data-bgo]').onclick=()=>{ if(A.batchBusy) return; const n=Math.max(1,parseInt($('[data-bn]').value,10)||5); LS('hmlAi3BatchN',String(n)); LS('hmlAi3BatchApprove',$('[data-bap]').checked?'1':'0'); const o=$('[data-bonly]'); if(o) LS('hmlAi3BatchOnlyAp',o.checked?'1':'0');
@@ -392,6 +404,7 @@
       batchRun({n,approve:$('[data-bap]').checked,onlyApproved:!!(o&&o.checked),recheck:$('[data-brc]').checked}).catch(er=>{ A.batchBusy=false; $('[data-bmsg]').textContent='멈춤: '+er.message; }); };
     $('[data-bstop]').onclick=()=>{ A.batchStop=true; $('[data-bmsg]').textContent='지금 문항까지 하고 멈춥니다…'; };
     $('[data-bcsv]').onclick=batchCsv;
+    $('[data-bdet]').onclick=()=>detailCsv().then(n=>{ if(!n) $('[data-bmsg]').textContent='아직 수정 내역이 없습니다(이 버전부터 쌓임).'; });
     $('[data-bclr]').onclick=()=>{ if(confirm('일괄 기록을 지울까요? (CMS 내용은 그대로)')){ BL.set({}); batchBar(ix); } }; }
   // 반영 뒤 화면이 바뀌면(다음 페이지에서) 결과 확인 → 완료 표시 → 꼭 수정 목록의 다음 문항 수정 화면으로
   async function checkPending(ix){ let p=null; try{ p=JSON.parse(LS('hmlAi3FixPending')||'null'); }catch(e){}
