@@ -1,5 +1,5 @@
-/* HML 수정 도우미 2026-11-17 10:18 */
-(function(){window.__hmlBuild='2026-11-17 10:18';document.documentElement.setAttribute('data-hml-quick','2026-11-17 10:18');
+/* HML 수정 도우미 2026-11-20 18:17 */
+(function(){window.__hmlBuild='2026-11-20 18:17';document.documentElement.setAttribute('data-hml-quick','2026-11-20 18:17');
 (() => {
   const Q = String.fromCharCode(63);
   const NARROW = 360;           // 좁은 화면 점검 폭(px)
@@ -180,7 +180,8 @@
       // 좁은 화면(모바일)
       cards.forEach(it=>{ it.body.style.width=NARROW+'px'; });
       await sleep(50);
-      cards.forEach(it=>{ const o=overflowCount(it.body); if(o) add(it.n,it.itemId,'화면','넘침(모바일 '+NARROW+'px)','수식·표·그림 '+o+'곳이 카드 밖으로 넘침'); });
+      // 모바일 넘침은 고칠 필요 없음(11/20 형순 님) → 지적 안 함
+      if(window.__hmlMobileCheck) cards.forEach(it=>{ const o=overflowCount(it.body); if(o) add(it.n,it.itemId,'화면','넘침(모바일 '+NARROW+'px)','수식·표·그림 '+o+'곳이 카드 밖으로 넘침'); });
       return {ok:true, items:cards.length, rows};
     }catch(e){ add('','','오류','검수 실패',e.message); return {ok:false, items:0, rows}; }
     finally{ box.remove(); }
@@ -230,7 +231,7 @@
       else if(omrTxt!==''){ const nz=x=>norm(String(x)).replace(/\s+/g,'').replace(/[{}$]/g,''); if(nz(omrTxt)!==nz(htmlAns)) add('내용','OMR 정답 차이','OMR('+(g.mode||'값')+'): '+omrTxt+' / HTML 정답: '+(htmlAns||'(없음)')); }
       const o1=overflowCount(body); if(o1) add('화면','넘침(PC '+PC_WIDTH+'px)','수식·표·그림 '+o1+'곳이 카드 밖으로 넘침');
       for(const [t,dt] of layoutIssues(body,window)) add('화면',t,dt);
-      body.style.width=NARROW+'px'; await sleep(30); const o2=overflowCount(body); if(o2) add('화면','넘침(모바일 '+NARROW+'px)','수식·표·그림 '+o2+'곳이 카드 밖으로 넘침');
+      if(window.__hmlMobileCheck){ body.style.width=NARROW+'px'; await sleep(30); const o2=overflowCount(body); if(o2) add('화면','넘침(모바일 '+NARROW+'px)','수식·표·그림 '+o2+'곳이 카드 밖으로 넘침'); }
       return {rows,n:it.n,data,omr}; }
     finally{ box.remove(); } }
   window.__hmlChecker2=Object.assign(window.__hmlChecker2||{},{brokenTokens,checkSheet,checkItem,norm,hmlTok,diff,ensureViewer});
