@@ -1,5 +1,5 @@
-/* HML AI 눈검수 2026-11-20 09:34 */
-window.__hmlAi3Build='2026-11-20 09:34';
+/* HML AI 눈검수 2026-11-20 09:43 */
+window.__hmlAi3Build='2026-11-20 09:43';
 // AI 눈검수(ver3): 바로 검사(ver2) 옆 칸에 'AI 눈검수' 칸을 붙임.
 // 버튼을 누르면 이 문항의 HML 캡처(문제·해답)와 HTML 내용을 AI(기본 Claude Haiku 5.5)에 보내 비교하고, 원하면 문제풀이·메타정보도 판단함.
 // API 키와 캡처 이미지는 확장(배경)에서만 다룸: 이 페이지 코드는 키를 볼 수 없음. CMS에 쓰는 것은 수정안 [붙여넣기]·[반영]을 누를 때뿐.
@@ -131,7 +131,8 @@ window.__hmlAi3Build='2026-11-20 09:34';
       P.innerHTML=c+'<div data-omrmsg style="font-size:12px"></div></div>';
       if(setEl) setEl.innerHTML='<div style="margin:4px 0">'+reBtns+'</div><label title="완료한 문항은 ◀ ▶에서 건너뜀"><input type="checkbox" data-muhide'+(LS('hmlAi3MustHide')!=='0'?' checked':'')+'> 완료 건너뛰기</label> <label title="끄면 미리 돌린 결과를 모두 보여 줌"><input type="checkbox" data-muonly checked> 꼭 수정만 보기</label>';
       const om=P.querySelector('[data-omr]'); if(om) om.onclick=async()=>{ let r; try{ r=await fillOmr(); }catch(er){ r={ok:false,msg:'OMR 채우기 실패: '+er.message}; }
-        if(!r) r={ok:true,msg:'OMR 정답이 이미 있거나 입력 칸이 없습니다(문항 형태 확인)'}; om.textContent=r.ok?'OMR ✓':'OMR ✗'; om.title=r.msg; const m=P.querySelector('[data-omrmsg]'); if(m){ m.textContent=r.msg; m.style.color=r.ok?'#188038':'#d93025'; } };
+        if(!r) r={ok:true,msg:'OMR 정답이 이미 있거나 입력 칸이 없습니다(문항 형태 확인)'}; om.textContent=r.ok&&!r.warn?'OMR ✓':'OMR ⚠'; om.title=r.msg; A.omrWarn=r.warn?id:null;
+        const m=P.querySelector('[data-omrmsg]'); if(m){ if(r.warn) m.innerHTML=omrWarnBox(r); else { m.textContent=r.msg; m.style.color='#188038'; } } };
       bindMust(b,ix,id); bindFix(P,e,id); bindRe(); return; }
     if(setEl) setEl.innerHTML=M&&M.length?'<label><input type="checkbox" data-muonly> 꼭 수정만 보기</label>':'';
     let h='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b>미리 돌린 눈검수</b><span style="font-size:11px;color:#888">'+esc(when)+' 기준 · '+ix.n+'문항</span><span style="flex:1"></span><button data-re title="HML_DOWNLOAD 폴더를 다시 읽음(합치기 뒤에 누르세요)">새로 읽기</button><button data-ch title="눈검수 결과가 있는 다른 폴더 고르기">폴더 바꾸기</button></div>';
@@ -251,9 +252,9 @@ window.__hmlAi3Build='2026-11-20 09:34';
     const r=pasteDocs(f.edits||[]);
     if(!r.ok){ if(ed) try{ ed.close(); }catch(x){} fixMsg('붙여넣지 않았습니다: '+r.rep.filter(x=>!x.ok).map(x=>x.ed.field+' '+x.msg).join(' / '),'#d93025'); return; }
     const L=FX.log(); L[id]={st:'붙여넣음',at:Date.now(),before:r.before}; FX.saveLog(L);
-    A.fxPasted=id; (async()=>{ let om=null; try{ om=await fillOmr(); }catch(er){ om={ok:false,msg:'OMR 채우기 실패: '+er.message}; }
-      const tab=htmlTab(); if(tab) try{ tab.click(); }catch(er){}
-      await showPre(id); const pm=(r.rep.length?'HTML 붙여넣음('+r.rep.map(x=>x.msg).join(', ')+'). ':'')+(om?om.msg+'. ':'');
+    A.fxPasted=id; (async()=>{ let om=null; try{ om=await fillOmr(); }catch(er){ om={ok:false,warn:true,msg:'OMR 채우기 실패: '+er.message}; }
+      A.omrWarn=om&&om.warn?id:null; if(!A.omrWarn){ const tab=htmlTab(); if(tab) try{ tab.click(); }catch(er){} }
+      await showPre(id); if(A.omrWarn){ const pp=box()&&box().querySelector('[data-pre]'); if(pp) pp.insertAdjacentHTML('beforeend',omrWarnBox(om)); } const pm=(r.rep.length?'HTML 붙여넣음('+r.rep.map(x=>x.msg).join(', ')+'). ':'')+(om?om.msg+'. ':'');
       if(hasH&&!ed){ fixMsg(pm+'HML도 고치려면 [수정]을 한 번 더 누르세요(편집기 팝업은 클릭이 필요).','#b06000'); A.fxNeedHml=id; return; }
       if(hasH){ try{ await doHml(id,e,ed); }catch(er){ fixMsg(pm+'HML은 고치지 못함: '+er.message+' → [반영]하지 말고 새로고침하세요.','#d93025'); return; } }
       fixMsg(pm+(hasH?'HML 저장함(아래 새 캡처 확인). ':'')+'HTML 탭에서 확인하고 [반영]을 누르세요. 잘못됐으면 새로고침하면 원래대로.',om&&!om.ok?'#b06000':'#188038'); })(); }
@@ -267,6 +268,7 @@ window.__hmlAi3Build='2026-11-20 09:34';
   async function doApply(id,e){ if(!isModify()||A.fxPasted!==id){ fixMsg('먼저 [수정]을 누르세요.','#d93025'); return; }
     if(e.fix.hml&&e.fix.hml.length&&A.fxHml!==id){ fixMsg('HML 수정안이 있습니다. 먼저 [HML 고치기]를 누르세요.','#d93025'); return; }
     if(typeof window.itemApplyAll!=='function'){ fixMsg('전체 반영 기능을 찾지 못했습니다.','#d93025'); return; }
+    if(A.omrWarn===id&&!confirm('OMR을 자동으로 넣었지만 확인이 필요한 문항입니다. OMR 수정 탭에서 확인했나요?')) return;
     fixMsg('전체 반영 중…'); window.itemApplyAll();
     const modal=document.getElementById('applyAllModal');
     try{ await waitFor(()=>modal&&modal.classList.contains('show'),5000,'확인창'); }catch(er){ fixMsg('전체 반영이 막혔습니다(필수 항목·정답 등). 화면 안내를 확인하세요.','#d93025'); return; }
@@ -400,10 +402,24 @@ window.__hmlAi3Build='2026-11-20 09:34';
       setTimeout(()=>u?doUndo(id):doPaste(id,e,true),500); } }
 
   // ---------- OMR: 주관식 정답 칸이 비어 있으면 [전체 반영]이 막힘 → HTML 정답에서 채움('16 cm' → 정답 16, 뒤 수식어 cm) ----------
-  function splitAnswer(raw){ let t=String(raw||'').replace(/<[^>]+>/g,' ').replace(/\$/g,' ').replace(/\\hspace\{[^}]*\}|\\[,;:! ]|~/g,' ').replace(/\s+/g,' ').trim();
-    if(!t||/[①-⑩]|풀이\s*참조|,|\\text\{|[가-힣]{2,}/.test(t)) return null;
-    let unit=''; const m=t.match(/^(.*?)\s*\\mathrm\{\s*([A-Za-z]+(?:\^\{?[23]\}?)?)\s*\}\s*$/)||t.match(/^(.*?\d)\s*(cm\^\{?[23]\}?|m\^\{?[23]\}?|cm|mm|km|m|kg|g|mL|L|개|명|원|번)\s*$/);
-    if(m){ t=m[1].trim(); unit=m[2].replace(/\^\{?([23])\}?/,'^$1'); } return t?{answer:t,suffix:unit}:null; }
+  // 정답 → OMR 칸들: [{prefix, answer, suffix}], sure=false면 사람 확인 필요(그래도 최선으로 넣음)
+  const UNIT=/^(.*?\S)\s*(?:\\mathrm\{\s*([A-Za-z]+(?:\^\{?[23]\}?)?)\s*\}|(cm\^\{?[23]\}?|m\^\{?[23]\}?|cm|mm|km|kg|mL|m|g|L|개|명|원|번|가지|마리|권|장|시간|분|초|일|살|배|점|회|쪽|송이|자루|대|켤레|병|잔|그릇|봉지|상자|묶음|모|°))\s*$/;
+  function topSplit(t,ch){ const out=[]; let d=0, cur=''; for(const c of t){ if(c==='{'||c==='('||c==='[') d++; else if(c==='}'||c===')'||c===']') d--; if(c===ch&&d===0){ out.push(cur); cur=''; } else cur+=c; } out.push(cur); return out.map(x=>x.trim()).filter(Boolean); }
+  function onePart(t,prefix){ t=t.trim(); let suffix=''; const m=t.match(UNIT); if(m&&/[\d}]/.test(m[1].slice(-1))){ t=m[1].trim(); suffix=(m[2]||m[3]).replace(/\^\{?([23])\}?/,'^$1'); }
+    return {prefix:prefix||'',answer:t,suffix}; }
+  function parseAnswer(raw){ let t=String(raw||'').replace(/<br\s*\/?>/gi,' ').replace(/<\/p>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&')
+      .replace(/\$/g,' ').replace(/\\hspace\{[^}]*\}|\\[,;:! ]|~/g,' ').replace(/\s+/g,' ').trim();
+    if(!t) return null; if(/^[①-⑩](\s*,?\s*[①-⑩])*$/.test(t)) return null;   // 객관식 번호
+    let parts=[], sure=true;
+    const mk=t.match(/\(\s*\d+\s*\)/g);
+    if(mk&&mk.length>1&&/^\(\s*1\s*\)/.test(t)){ const segs=t.split(/(\(\s*\d+\s*\))/).filter(x=>x.trim()); for(let k=0;k<segs.length;k++){ if(/^\(\s*\d+\s*\)$/.test(segs[k])){ const v=(segs[k+1]&&!/^\(\s*\d+\s*\)$/.test(segs[k+1]))?segs[++k]:''; parts.push(onePart(v.replace(/^[\s:,]+|[\s,]+$/g,''),segs[k-(v?1:0)].replace(/\s/g,''))); } } }
+    else{ const segs=topSplit(t,','); for(const sg of segs){ const lm=sg.match(/^(?:\\(?:rm|mathrm)\s*)?\{?\s*([A-Za-z가-힣]{1,3})\s*\}?\s*:\s*(.+)$/);
+        if(lm) parts.push(onePart(lm[2],/^[A-Za-z]+$/.test(lm[1])?'\\mathrm{'+lm[1]+'}':lm[1])); else parts.push(onePart(sg,'')); } }
+    if(!parts.length) return null;
+    if(parts.length>1||parts.some(x=>x.prefix)) sure=false;
+    if(parts.some(x=>/[가-힣]|\\text\{|풀이\s*참조/.test(x.answer)||!x.answer)) sure=false;
+    return {parts,sure}; }
+  function splitAnswer(raw){ const r=parseAnswer(raw); return r&&r.sure&&r.parts.length===1?{answer:r.parts[0].answer,suffix:r.parts[0].suffix}:null; }
   function omrInputs(W=window){ const out={}; W.document.querySelectorAll('math-field,input,textarea,[contenteditable=""],[contenteditable=true],[placeholder],[aria-placeholder],[data-placeholder]').forEach(el=>{
       if(!el.offsetParent||(panelEl()&&panelEl().contains(el))) return;
       let ph=el.getAttribute('placeholder')||el.getAttribute('aria-placeholder')||el.getAttribute('data-placeholder')||(typeof el.placeholder==='string'?el.placeholder:'')||'';
@@ -413,12 +429,35 @@ window.__hmlAi3Build='2026-11-20 09:34';
   function setField(el,v,W=window){ try{ if(typeof el.setValue==='function') el.setValue(v); else if('value' in el) el.value=v; else el.textContent=v; }catch(e){ el.textContent=v; }
     ['input','change','blur'].forEach(t=>{ try{ el.dispatchEvent(new W.Event(t,{bubbles:true,composed:true})); }catch(e){} }); if(el.style) el.style.outline='3px solid #f59f00'; }
   const tabBtn=(name,W=window)=>[...W.document.querySelectorAll('.nav-link,[role=tab],button,a')].find(b=>b.textContent.trim()===name&&!(panelEl()&&panelEl().contains(b)));
-  async function fillOmr(W=window){ const tab=tabBtn('OMR 수정',W); if(tab){ tab.click(); await new Promise(r=>setTimeout(r,700)); }
-    const f=omrInputs(W); if(!f.answer||String(fieldVal(f.answer)).trim()) return null;
+  // OMR 칸을 줄(앞 수식어·정답·뒤 수식어)로 묶음. 다답형이면 줄이 여러 개
+  function omrRows(W=window){ const rows=[]; let cur=null; W.document.querySelectorAll('math-field,input,textarea,[contenteditable=""],[contenteditable=true],[placeholder],[aria-placeholder],[data-placeholder]').forEach(el=>{
+      if(!el.offsetParent||(panelEl()&&panelEl().contains(el))) return;
+      let ph=el.getAttribute('placeholder')||el.getAttribute('aria-placeholder')||el.getAttribute('data-placeholder')||(typeof el.placeholder==='string'?el.placeholder:'')||'';
+      if(!ph&&el.closest){ const c=el.closest('[placeholder],[data-placeholder]'); if(c) ph=c.getAttribute('placeholder')||c.getAttribute('data-placeholder')||''; }
+      const k=/정답\s*입력/.test(ph)?'answer':/뒤\s*수식어/.test(ph)?'suffix':/앞\s*수식어/.test(ph)?'prefix':null; if(!k) return;
+      if(!cur||k==='prefix'||cur[k]){ cur={}; rows.push(cur); } cur[k]=el; });
+    return rows.filter(r=>r.answer); }
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  async function fillOmr(W=window){ const tab=tabBtn('OMR 수정',W); if(tab){ tab.click(); await sleep(700); }
+    let rows=omrRows(W); if(!rows.length) return null;
+    if(rows.some(r=>String(fieldVal(r.answer)).trim())) return null;   // 이미 정답이 있음
     let ans=''; jsonEls(W).forEach(el=>{ let d=null; try{ d=JSON.parse(el.textContent); }catch(e){} if(d) walkStr(d,[],(o,k,v)=>{ if(!ans&&(k==='answerText'||k==='correctHtml')&&v) ans=v; }); });
-    const sp=splitAnswer(ans); if(!sp) return {ok:false,msg:'OMR 정답이 비어 있음. 나눌 수 없는 답('+String(ans).slice(0,30)+') → OMR 수정 탭에서 직접 입력'};
-    setField(f.answer,sp.answer,W); if(sp.suffix&&f.suffix) setField(f.suffix,sp.suffix,W);
-    const ok=!!String(fieldVal(f.answer)).trim(); return {ok,msg:'OMR 정답 '+sp.answer+(sp.suffix?', 뒤 수식어 '+sp.suffix:'')+(ok?' 넣음':' 넣기 실패 → OMR 수정 탭에서 직접 입력')}; }
+    const pa=parseAnswer(ans); if(!pa) return {ok:false,warn:true,msg:'OMR 정답이 비어 있음. 객관식 번호이거나 정답을 못 찾음('+String(ans).replace(/<[^>]+>/g,'').slice(0,30)+') → OMR 수정 탭에서 직접 입력'};
+    const P=pa.parts; let note=[];
+    if(P.length>1){ // 다답형으로 바꾸고 줄 수 맞추기
+      const sel=W.document.getElementById('qtAnswer'); const o=sel&&[...sel.options].find(x=>/다답/.test(x.text));
+      if(o&&sel.value!==o.value){ sel.value=o.value; sel.dispatchEvent(new W.Event('change',{bubbles:true})); await sleep(900); const t2=tabBtn('OMR 수정',W); if(t2){ t2.click(); await sleep(500); } note.push('문항 형태를 다답형으로 바꿈'); }
+      else if(!o) note.push('다답형 선택을 못 찾음');
+      rows=omrRows(W);
+      for(let k=0;rows.length<P.length&&k<P.length;k++){ const add=[...W.document.querySelectorAll('button,a')].find(b=>b.offsetParent&&/추가/.test(b.textContent)&&!/유사|단원|유형|성취|코드/.test(b.textContent)&&!(panelEl()&&panelEl().contains(b)));
+        if(!add) break; add.click(); await sleep(400); rows=omrRows(W); } }
+    const n=Math.min(P.length,rows.length);
+    for(let k=0;k<n;k++){ const r=rows[k], x=P[k]; setField(r.answer,x.answer,W); if(x.suffix&&r.suffix) setField(r.suffix,x.suffix,W); if(x.prefix&&r.prefix) setField(r.prefix,x.prefix,W); }
+    if(n<P.length){ const rest=P.slice(n-1).map(x=>(x.prefix?x.prefix+' ':'')+x.answer+(x.suffix?' '+x.suffix:'')).join(', '); setField(rows[n-1].answer,rest,W); note.push('칸이 '+rows.length+'개뿐이라 남은 답을 마지막 칸에 몰아 넣음'); }
+    const desc=P.map(x=>(x.prefix?'['+x.prefix+'] ':'')+x.answer+(x.suffix?' ['+x.suffix+']':'')).join(' / ');
+    const ok=!!String(fieldVal(rows[0].answer)).trim(), warn=!pa.sure||note.length>0||!ok;
+    return {ok,warn,msg:(P.length>1?'OMR 다답형 '+P.length+'개: ':'OMR 정답: ')+desc+(note.length?' ('+note.join(', ')+')':'')+(ok?'':' 넣기 실패')}; }
+  function omrWarnBox(r){ return r&&r.warn?'<div style="margin-top:4px;padding:6px 8px;border-radius:6px;background:#fff4e5;border:2px solid #f59f00;color:#b06000;font-weight:bold">⚠ OMR 확인 필요: '+esc(r.msg)+'<br><span style="font-weight:normal">자동으로 넣었지만 확실하지 않습니다. 저장(반영) 전에 OMR 수정 탭에서 앞 수식어·정답·뒤 수식어를 꼭 확인하세요.</span></div>':''; }
 
 
   // ---------- 그림 키우기: 지금 문항 HTML의 <img>를 한 번에 키움(미리보기 → 넣기 → 반영 / 되돌리기=새로고침) ----------
