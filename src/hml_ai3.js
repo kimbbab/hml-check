@@ -111,7 +111,7 @@
       const bt=(k,t,ti,st)=>'<button data-mu="'+k+'" title="'+esc(ti||'')+'"'+(st?' style="'+st+'"':'')+'>'+t+'</button>';
       let c='<div style="padding:6px 8px;border-radius:6px;background:#fff;border:2px solid '+(cur&&!d[cur.id]?'#d93025':'#188038')+'">'+
         '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b style="color:#d93025">꼭 수정</b><span><b>'+(i>=0?(i+1):'–')+'</b> / '+M.length+'</span><span style="color:#188038;font-size:12px">완료 '+dn+'</span><span style="flex:1"></span>'+
-        bt('prev','◀','목록의 이전 문항')+bt('next','▶','목록의 다음 문항')+
+        (isModify()?'<button data-omr title="OMR 정답이 비어 있으면 HTML 정답으로 채움(16 cm → 정답 16, 뒤 수식어 cm)">OMR 채우기</button>':'')+bt('prev','◀','목록의 이전 문항')+bt('next','▶','목록의 다음 문항')+
         (cur?bt('done',d[cur.id]?'완료 취소':'✓ 완료','다 고쳤으면 누르세요(이 브라우저에만 저장)',d[cur.id]?'':'background:#188038;color:#fff;border:0;border-radius:4px;padding:2px 8px;font-weight:bold'):bt('first','안 끝난 문항으로','목록에서 아직 안 끝난 첫 문항'))+'</div>';
       if(!cur) c+='<div style="font-size:12px;color:#888;margin-top:2px">이 문항은 꼭 수정 목록에 없습니다(고칠 것 없음).</div>';
       else{ c+='<div style="font-size:12px;color:#666;margin-top:2px">'+esc(cur.sname)+' · #'+esc(cur.no)+' · 시트 No '+esc(cur.row||'')+(d[cur.id]?' · <b style="color:#188038">✓ 완료</b>':'')+'</div>';
@@ -126,8 +126,10 @@
         if(lines.length) c+='<ul style="margin:4px 0;padding-left:18px">'+lines.map(l=>'<li style="margin:2px 0">'+l+'</li>').join('')+'</ul>';
         c+=e&&e.fix?fixBlock(e,id,true):'<div style="font-size:12px;color:#888;border-top:1px dashed #ddd;padding-top:3px">수정안 없음 → 직접 고치세요</div>'; }
       if(ix.mustMissing) c+='<div style="font-size:11px;color:#aaa">아직 검사 안 된 시험지 '+esc(ix.mustMissing)+'개는 목록에 없음</div>';
-      P.innerHTML=c+'</div>';
+      P.innerHTML=c+'<div data-omrmsg style="font-size:12px"></div></div>';
       if(setEl) setEl.innerHTML='<div style="margin:4px 0">'+reBtns+'</div><label title="완료한 문항은 ◀ ▶에서 건너뜀"><input type="checkbox" data-muhide'+(LS('hmlAi3MustHide')!=='0'?' checked':'')+'> 완료 건너뛰기</label> <label title="끄면 미리 돌린 결과를 모두 보여 줌"><input type="checkbox" data-muonly checked> 꼭 수정만 보기</label>';
+      const om=P.querySelector('[data-omr]'); if(om) om.onclick=async()=>{ let r; try{ r=await fillOmr(); }catch(er){ r={ok:false,msg:'OMR 채우기 실패: '+er.message}; }
+        if(!r) r={ok:true,msg:'OMR 정답이 이미 있거나 입력 칸이 없습니다(문항 형태 확인)'}; om.textContent=r.ok?'OMR ✓':'OMR ✗'; om.title=r.msg; const m=P.querySelector('[data-omrmsg]'); if(m){ m.textContent=r.msg; m.style.color=r.ok?'#188038':'#d93025'; } };
       bindMust(b,ix,id); bindFix(P,e,id); bindRe(); return; }
     if(setEl) setEl.innerHTML=M&&M.length?'<label><input type="checkbox" data-muonly> 꼭 수정만 보기</label>':'';
     let h='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><b>미리 돌린 눈검수</b><span style="font-size:11px;color:#888">'+esc(when)+' 기준 · '+ix.n+'문항</span><span style="flex:1"></span><button data-re title="HML_DOWNLOAD 폴더를 다시 읽음(합치기 뒤에 누르세요)">새로 읽기</button><button data-ch title="눈검수 결과가 있는 다른 폴더 고르기">폴더 바꾸기</button></div>';
