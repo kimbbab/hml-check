@@ -1,5 +1,5 @@
-/* HML AI 눈검수 2026-11-20 12:51 */
-window.__hmlAi3Build='2026-11-20 12:51';
+/* HML AI 눈검수 2026-11-20 12:56 */
+window.__hmlAi3Build='2026-11-20 12:56';
 // AI 눈검수(ver3): 바로 검사(ver2) 옆 칸에 'AI 눈검수' 칸을 붙임.
 // 버튼을 누르면 이 문항의 HML 캡처(문제·해답)와 HTML 내용을 AI(기본 Claude Haiku 5.5)에 보내 비교하고, 원하면 문제풀이·메타정보도 판단함.
 // API 키와 캡처 이미지는 확장(배경)에서만 다룸: 이 페이지 코드는 키를 볼 수 없음. CMS에 쓰는 것은 수정안 [붙여넣기]·[반영]을 누를 때뿐.
@@ -197,7 +197,9 @@ window.__hmlAi3Build='2026-11-20 12:51';
   function fixMsg(t,c){ const m=box()&&box().querySelector('[data-fxmsg]'); if(m){ m.textContent=t; m.style.color=c||'#333'; } }
   async function verifyFix(id,edits){ let t=await (await fetch('/item/all/detail.donga'+Q+'itemId='+id,{credentials:'include'})).text();
     t=t.replace(/\\u([0-9a-fA-F]{4})/g,(_,h)=>String.fromCharCode(parseInt(h,16))).replace(/\\\//g,'/').replace(/\\"/g,'"');
-    const ta=document.createElement('textarea'); ta.innerHTML=t; const t2=ta.value, has=s=>t.includes(s)||t2.includes(s), bad=[];
+    const ta=document.createElement('textarea'); ta.innerHTML=t; const t2=ta.value, bad=[];
+    const flat=x=>{ const e=document.createElement('textarea'); e.innerHTML=String(x).replace(/<[^>]*>/g,''); return e.value.replace(/\s+/g,''); }, t3=flat(t2);
+    const has=s=>t.includes(s)||t2.includes(s)||(flat(s)&&t3.includes(flat(s)));   // 태그·띄어쓰기·&기호가 달라도 같은 글이면 있음
     edits.forEach(ed=>{ if(ed.all){ if(!ed.replace.includes(ed.find)&&has(ed.find)) bad.push('남아 있음: '+ed.find.slice(0,30)); } else if(!ed.replace.includes(ed.find)&&has(ed.find)&&!has(ed.replace)) bad.push('안 바뀜: '+ed.find.slice(0,30)); });
     return bad; }
 
@@ -381,7 +383,7 @@ window.__hmlAi3Build='2026-11-20 12:51';
       try{ const t=await batchOne(W,id,f,opt,x=>say('['+(i+1)+'/'+todo.length+'] '+x),det); await fin(); L[id]={st:'완료',msg:t,at:Date.now(),sig:fixSig(f)}; ok++; fails=0;
         if(RR) try{ await recheckAdd(RR,id,ix); }catch(er){ L[id].msg+=' · 재검수 목록 못 씀: '+er.message; }
         const d=doneMap(); d[id]=Date.now(); LS('hmlAi3MustDone',JSON.stringify(d)); const FL=FX.log(); FL[id]=Object.assign(FL[id]||{},{st:'반영',at:Date.now()}); FX.saveLog(FL); }
-      catch(er){ if(er.applied) await fin(); L[id]={st:er.applied?'반영(확인 필요)':'건너뜀',msg:er.message,at:Date.now()}; bad++; fails++;
+      catch(er){ if(er.applied) await fin(); L[id]={st:er.applied?'반영(확인 필요)':'건너뜀',msg:er.message,at:Date.now()}; bad++; if(!er.applied) fails++;   // 반영은 된 문항(확인만 필요)은 연속 실패로 안 셈
         if(er.stop){ BL.set(L); say('멈춤: '+er.message); break; }
         if(fails>=3){ BL.set(L); say('연속 3번 실패해서 멈춤. 마지막: '+id+' '+er.message); break; } }
       BL.set(L); }
