@@ -1,5 +1,5 @@
-/* HML AI 눈검수 2026-11-20 10:53 */
-window.__hmlAi3Build='2026-11-20 10:53';
+/* HML AI 눈검수 2026-11-20 11:19 */
+window.__hmlAi3Build='2026-11-20 11:19';
 // AI 눈검수(ver3): 바로 검사(ver2) 옆 칸에 'AI 눈검수' 칸을 붙임.
 // 버튼을 누르면 이 문항의 HML 캡처(문제·해답)와 HTML 내용을 AI(기본 Claude Haiku 5.5)에 보내 비교하고, 원하면 문제풀이·메타정보도 판단함.
 // API 키와 캡처 이미지는 확장(배경)에서만 다룸: 이 페이지 코드는 키를 볼 수 없음. CMS에 쓰는 것은 수정안 [붙여넣기]·[반영]을 누를 때뿐.
@@ -349,14 +349,17 @@ window.__hmlAi3Build='2026-11-20 10:53';
     const L=BL.get(), order=((ix.must||[]).map(m=>m.id)).concat(Object.keys(ix.idx)).filter((x,i,a)=>a.indexOf(x)===i);
     const todo=order.filter(id=>{ const e=ix.idx[id], f=e&&e.fix; if(!f) return false; if(opt.onlyApproved&&!f.approved) return false;
       // '준비'와 'AI 아직'(규칙 수정만 먼저 반영, 나머지 지적은 직접) 둘 다 돌림
-      const ok=(/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); return ok&&!(L[id]&&/^완료/.test(L[id].st)&&L[id].sig===fixSig(f)); }).slice(0,opt.n);
+      const ok=(/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); return ok&&!(L[id]&&/^완료/.test(L[id].st)&&(!L[id].sig||L[id].sig===fixSig(f))); });   // 완료(예전 기록은 서명 없음)는 건너뜀, 수정안이 바뀐 것만 다시
+    const all=todo.length, failed=todo.filter(id=>L[id]), fresh=todo.filter(id=>!L[id]);
+    todo.length=0; todo.push(...fresh.concat(failed).slice(0,opt.n));   // 처음 하는 문항 먼저, 전에 건너뛴 문항은 뒤에
+    const doneN=Object.keys(L).filter(id=>/^완료/.test(L[id].st)).length;
     if(!todo.length){ say('돌릴 문항이 없습니다(모두 끝났거나 수정안 없음).'); return; }
     const RR=opt.recheck?await recheckRoot():null;   // 쓰기 권한 묻기는 팝업보다 먼저(클릭 직후여야 함)
     const W=window.open('about:blank','hmlBatchWork','width=1280,height=900'); if(!W){ say('팝업이 막혔습니다. 팝업 허용 후 다시 누르세요.'); return; }
     if(opt.recheck&&!RR) say('HML_DOWNLOAD 쓰기 권한이 없어 재검수 목록은 안 남깁니다(수정은 계속).');
     A.batchStop=false; A.batchBusy=true; let fails=0, ok=0, bad=0;
     for(let i=0;i<todo.length;i++){ if(A.batchStop){ say('멈춤(사용자). '+ok+' 완료 · '+bad+' 건너뜀'); break; }
-      const id=todo[i], f=ix.idx[id].fix; say('['+(i+1)+'/'+todo.length+'] '+id);
+      const id=todo[i], f=ix.idx[id].fix; say('['+(i+1)+'/'+todo.length+'] '+id+' (이미 완료 '+doneN+' 건너뜀 · 남은 '+all+')');
       try{ const t=await batchOne(W,id,f,opt,x=>say('['+(i+1)+'/'+todo.length+'] '+x)); L[id]={st:'완료',msg:t,at:Date.now(),sig:fixSig(f)}; ok++; fails=0;
         if(RR) try{ await recheckAdd(RR,id,ix); }catch(er){ L[id].msg+=' · 재검수 목록 못 씀: '+er.message; }
         const d=doneMap(); d[id]=Date.now(); LS('hmlAi3MustDone',JSON.stringify(d)); const FL=FX.log(); FL[id]=Object.assign(FL[id]||{},{st:'반영',at:Date.now()}); FX.saveLog(FL); }
