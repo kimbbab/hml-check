@@ -1,5 +1,5 @@
-/* HML AI 눈검수 2026-11-20 09:43 */
-window.__hmlAi3Build='2026-11-20 09:43';
+/* HML AI 눈검수 2026-11-20 10:40 */
+window.__hmlAi3Build='2026-11-20 10:40';
 // AI 눈검수(ver3): 바로 검사(ver2) 옆 칸에 'AI 눈검수' 칸을 붙임.
 // 버튼을 누르면 이 문항의 HML 캡처(문제·해답)와 HTML 내용을 AI(기본 Claude Haiku 5.5)에 보내 비교하고, 원하면 문제풀이·메타정보도 판단함.
 // API 키와 캡처 이미지는 확장(배경)에서만 다룸: 이 페이지 코드는 키를 볼 수 없음. CMS에 쓰는 것은 수정안 [붙여넣기]·[반영]을 누를 때뿐.
@@ -179,17 +179,21 @@ window.__hmlAi3Build='2026-11-20 09:43';
       if(lay(ed.find)!==lay(ed.replace)){ rep.push({ok:false,ed,msg:'표·그림 서식(태그·크기·위치)이 바뀌는 수정이라 막음 → 직접 고치세요'}); continue; }
       if(ed.all){ const key=ed.find+'\u0000'+ed.replace; if(doneAll[key]){ rep.push({ok:true,ed,msg:'앞에서 함께 바꿈'}); continue; }
         let n=0; docs.forEach(d=>d&&walkStr(d,[],(o,k,v)=>{ if(v.includes(ed.find)){ n+=v.split(ed.find).length-1; o[k]=v.split(ed.find).join(ed.replace); } }));
-        doneAll[key]=1; rep.push(n?{ok:true,ed,msg:n+'곳'}:{ok:false,ed,msg:'찾을 글 없음(이미 고쳐졌을 수 있음)'}); continue; }
+        doneAll[key]=1; rep.push(n?{ok:true,ed,msg:n+'곳'}:{ok:true,ed,msg:'이미 고쳐짐',already:true}); continue; }
+      const has=x=>{ let f=false; docs.forEach(d=>d&&walkStr(d,[],(o,k,v)=>{ if(!/Text$/.test(k)&&v.includes(x)) f=true; })); return f; };
       const hits=[], any=[];
       docs.forEach(d=>d&&walkStr(d,[],(o,k,v,p)=>{ const c=v.split(ed.find).length-1; if(c){ const h={o,k,c,p}; any.push(h); if(pathHit(p,ed.field)) hits.push(h); } }));
       const use=hits.length?hits:any.filter(h=>!/Text$/.test(h.k));
-      if(!use.length){ rep.push({ok:false,ed,msg:'찾을 글이 화면에 없음'}); continue; }
+      if(!use.length){ if(ed.replace&&has(ed.replace)){ rep.push({ok:true,ed,msg:'이미 고쳐짐',already:true}); continue; } rep.push({ok:false,ed,msg:'찾을 글이 화면에 없음'}); continue; }
       if(use.some(h=>h.c!==1)){ rep.push({ok:false,ed,msg:'찾을 글이 여러 번'}); continue; }
       use.forEach(h=>{ h.o[h.k]=h.o[h.k].replace(ed.find,()=>ed.replace); }); rep.push({ok:true,ed,msg:'바꿈'}); }
     if(rep.some(r=>!r.ok)) return {ok:false,rep};
     const before={}; els.forEach((el,i)=>{ if(!docs[i]) return; const t=JSON.stringify(docs[i]); if(t!==JSON.stringify(JSON.parse(el.textContent))){ before[el.id||('json-'+i)]=el.textContent; el.textContent=t; } });
     return {ok:true,rep,before}; }
-  async function waitFor(fn,ms,what){ const t0=Date.now(); while(Date.now()-t0<ms){ let v; try{ v=fn(); }catch(e){ v=null; } if(v) return v; await new Promise(r=>setTimeout(r,250)); } throw new Error('시간 초과: '+what); }
+  // 창이 가려지면 브라우저가 setTimeout을 크게 늦춤(일괄 중 멈춘 것처럼 보임) → Worker 타이머
+  const TW=(()=>{ try{ const w=new Worker(URL.createObjectURL(new Blob(['onmessage=function(e){setTimeout(function(){postMessage(e.data)},e.data.ms)}'],{type:'text/javascript'}))); const cb={}; let n=0; w.onmessage=e=>{ const f=cb[e.data.id]; delete cb[e.data.id]; if(f) f(); }; return ms=>new Promise(r=>{ const id=++n; cb[id]=r; w.postMessage({id,ms}); }); }catch(e){ return null; } })();
+  const nap=ms=>TW?TW(ms):new Promise(r=>setTimeout(r,ms));
+  async function waitFor(fn,ms,what){ const t0=Date.now(); while(Date.now()-t0<ms){ let v; try{ v=fn(); }catch(e){ if(e&&e.hard) throw e; v=null; } if(v) return v; await nap(250); } throw new Error('시간 초과: '+what); }
   function fixMsg(t,c){ const m=box()&&box().querySelector('[data-fxmsg]'); if(m){ m.textContent=t; m.style.color=c||'#333'; } }
   async function verifyFix(id,edits){ let t=await (await fetch('/item/all/detail.donga'+Q+'itemId='+id,{credentials:'include'})).text();
     t=t.replace(/\\u([0-9a-fA-F]{4})/g,(_,h)=>String.fromCharCode(parseInt(h,16))).replace(/\\\//g,'/').replace(/\\"/g,'"');
@@ -211,7 +215,7 @@ window.__hmlAi3Build='2026-11-20 09:43';
     const st=()=>{ const x=ed.document.querySelector('[data-webhwp-status]'); return x?x.textContent.trim():''; }, Hf=()=>ed.document.getElementById('webhwpFrame').contentWindow.HwpCtrl;
     const closeM=()=>{ try{ ed.document.querySelectorAll('.modal.show').forEach(m=>{ const b=m.querySelector('[data-alert-ok],.btn-primary[data-bs-dismiss],[data-bs-dismiss=modal]'); if(b) b.click(); }); }catch(e){} };
     const hard=m=>{ const e=new Error(m); e.hard=1; return e; };
-    const until=async(fn,ms,w)=>{ const t0=Date.now(); while(Date.now()-t0<ms){ let v; try{ v=fn(); }catch(e){ if(e&&e.hard) throw e; v=null; } if(v) return v; await new Promise(r=>setTimeout(r,250)); } throw new Error('시간 초과: '+w); };
+    const until=async(fn,ms,w)=>{ const t0=Date.now(); while(Date.now()-t0<ms){ let v; try{ v=fn(); }catch(e){ if(e&&e.hard) throw e; v=null; } if(v) return v; await nap(250); } throw new Error('시간 초과: '+w); };
     say('한글 편집기 여는 중…');
     await until(()=>ed.document.readyState==='complete'&&ed.document.querySelector('[data-webhwp-action=save]'),60000,'편집기 열기');
     await until(()=>/열었습니다/.test(st()),90000,'첫 파일 열기');
@@ -219,19 +223,22 @@ window.__hmlAi3Build='2026-11-20 09:43';
     for(const s of slots){ const b=ed.document.querySelector('[data-webhwp-open][data-slot='+s+']'); if(!b) throw new Error(HSLOT[s]+' 버튼이 없음'); closeM();
       if(!b.classList.contains('active')){ ed.document.querySelector('[data-webhwp-status]').textContent=''; b.click();
         await until(()=>{ if(/못했습니다/.test(st())) throw hard(HSLOT[s]+' 파일을 열지 못함'); return /열었습니다/.test(st())&&b.classList.contains('active'); },90000,HSLOT[s]+' 열기'); }
-      await new Promise(r=>setTimeout(r,800)); const H=Hf(), eqs=hEqs(H), probs=[];
+      await nap(800); const H=Hf(), eqs=hEqs(H), probs=[];
+      const findTxt=t=>{ H.MovePos(2); const a=H.CreateAction('RepeatFind'), z=a.CreateSet(); a.GetDefault(z); z.SetItem('FindString',t); z.SetItem('Direction',0); z.SetItem('IgnoreMessage',1); return a.Execute(z); };
       by[s].forEach((x,i)=>{ if(x.eq==null) return; const hit=eqs.filter(c=>nz(hEq(c))===nz(x.eq));
+        if(!hit.length&&eqs.some(c=>nz(hEq(c))===nz(x.to))){ x._done=1; return; }   // 이미 고쳐짐
         if(x.nth){ if(hit.length<x.nth) probs.push('"'+x.eq+'" '+hit.length+'개뿐'); else x._c=hit[x.nth-1]; } else if(hit.length!==1) probs.push('"'+x.eq+'" '+hit.length+'개'); else x._c=hit[0]; });
       if(probs.length) throw new Error(HSLOT[s]+' 수식이 안 맞아 HML은 저장 안 함: '+probs.join(', ')+' (이 칸 수식: '+eqs.map(hEq).join(' | ').slice(0,300)+')');
-      for(const x of by[s]){
+      for(const x of by[s]) if(x.eq==null&&!findTxt(x.text)&&findTxt(x.to)) x._done=1;   // 글자도 이미 고쳐졌으면 건너뜀
+      if(by[s].every(x=>x._done)){ say(HSLOT[s]+' HML은 이미 고쳐져 있음'); continue; }
+      for(const x of by[s]){ if(x._done) continue;
         if(x.eq!=null){ const p=x._c.Properties; p.SetItem('String',x.to); x._c.Properties=p; if(nz(hEq(x._c))!==nz(x.to)) throw new Error('수식 바꾸기 반영 안 됨: '+x.eq); }
-        else { H.MovePos(2); const a=H.CreateAction('RepeatFind'), z=a.CreateSet(); a.GetDefault(z); z.SetItem('FindString',x.text); z.SetItem('Direction',0); z.SetItem('IgnoreMessage',1);
-          if(!a.Execute(z)) throw new Error(HSLOT[s]+' 글자 "'+x.text+'" 없음'); H.Run('Delete'); const ia=H.CreateAction('InsertText'), is=ia.CreateSet(); ia.GetDefault(is); is.SetItem('Text',x.to); if(!ia.Execute(is)) throw new Error('글자 넣기 실패'); } }
+        else { if(!findTxt(x.text)) throw new Error(HSLOT[s]+' 글자 "'+x.text+'" 없음'); H.Run('Delete'); const ia=H.CreateAction('InsertText'), is=ia.CreateSet(); ia.GetDefault(is); is.SetItem('Text',x.to); if(!ia.Execute(is)) throw new Error('글자 넣기 실패'); } }
       say(HSLOT[s]+' 저장 중…'); closeM(); const before=W.webhwpSavedHml[s]||'';
       ed.document.querySelector('[data-webhwp-action=save]').click();
       await until(()=>{ if(/실패|읽지 못했습니다/.test(st())) throw hard(HSLOT[s]+' 저장 실패: '+st()); return (W.webhwpSavedHml[s]||'')!==before&&W.webhwpSavedImage[s]; },120000,HSLOT[s]+' 저장');
-      await until(()=>!/중입니다/.test(st()),60000,HSLOT[s]+' 다시 열기'); await new Promise(r=>setTimeout(r,800)); closeM();
-      const after=hEqs(Hf()).map(hEq), miss=by[s].filter(x=>x.eq!=null&&!after.some(a=>nz(a)===nz(x.to)));
+      await until(()=>!/중입니다/.test(st()),60000,HSLOT[s]+' 다시 열기'); await nap(800); closeM();
+      const after=hEqs(Hf()).map(hEq), miss=by[s].filter(x=>x.eq!=null&&!x._done&&!after.some(a=>nz(a)===nz(x.to)));
       if(miss.length) throw new Error(HSLOT[s]+' 저장 뒤 확인 실패: '+miss.map(x=>x.to).join(', '));
       done.push(s); }
     try{ ed.close(); }catch(e){}
@@ -286,11 +293,11 @@ window.__hmlAi3Build='2026-11-20 09:43';
     if(curStatus(W)==='Y') return '이미 승인(사용)';
     if(f.disabled) throw new Error('상태를 바꿀 수 없음(폐기 등)');
     const y=f.querySelector('input[name=viewFlag][value=Y]'); if(!y||y.disabled) throw new Error('승인(사용) 선택 불가');
-    y.click(); await new Promise(r=>setTimeout(r,300)); W.__hmlMark=1; sv.click();
+    y.click(); await nap(300); const od=W.document; sv.click();
     const m=await waitFor(()=>{ const sh=W.document.querySelector('#statusSaveModal.show,#statusSetModal.show,#statusDiscardModal.show'); if(sh) return sh; const t=toastOf(W); if(/승인할 수 없|실패|오류|필수/.test(t)) throw new Error(t); return null; },8000,'승인 확인창').catch(er=>{ const t=toastOf(W); throw new Error(t||er.message); });
     if(m.id==='statusDiscardModal') throw new Error('폐기 확인창이 떠서 멈춤');
     await new Promise(r=>setTimeout(r,300)); m.querySelector('[data-action-ok]').click();
-    await waitFor(()=>{ let gone=false; try{ gone=!W.__hmlMark; }catch(e){} return gone&&W.document.readyState==='complete'&&W.document.getElementById('statusFields'); },60000,'승인 저장');
+    await waitFor(()=>{ let gone=false; try{ gone=W.document!==od; }catch(e){} return gone&&W.document.readyState!=='loading'&&W.document.getElementById('statusFields'); },60000,'승인 저장');
     if(curStatus(W)!=='Y') throw new Error('저장 뒤에도 승인(사용)이 아님 '+toastOf(W));
     return m.id==='statusSetModal'?'승인(사용) 세트 전체':'승인(사용)'; }
   function statusBar(id){ const el=box()&&box().querySelector('[data-st]'); if(!el) return;
@@ -303,35 +310,44 @@ window.__hmlAi3Build='2026-11-20 09:43';
   // 안전장치: 수정안이 화면과 하나라도 안 맞거나, HML 저장 뒤 확인 실패, 반영 막힘, 반영 뒤 상세에서 확인 실패 → 그 문항은 반영·승인 안 하고 건너뜀.
   // 연속 3번 실패하면 멈춤. 기록은 localStorage 'hmlAi3BatchLog'(이어하기·CSV). 한 번에 몇 문항만 돌릴지 정함(처음엔 5).
   const BL={ get:()=>{ try{ return JSON.parse(LS('hmlAi3BatchLog')||'{}'); }catch(e){ return {}; } }, set:v=>LS('hmlAi3BatchLog',JSON.stringify(v)) };
-  async function navTo(W,url,ready,what){ try{ W.__hmlMark=1; }catch(e){} W.location.href=url;
-    return waitFor(()=>{ let fresh=false; try{ fresh=!W.__hmlMark&&W.document.readyState==='complete'; }catch(e){ return null; }
+  // 새 문서가 열렸는지는 document가 바뀌었는지로 봄(빈 창(about:blank)에서 처음 열 때는 window가 그대로 재사용돼 표시를 못 씀)
+  async function navTo(W,url,ready,what){ let od=null; try{ od=W.document; }catch(e){} W.location.href=url;
+    return waitFor(()=>{ let fresh=false; try{ fresh=W.document!==od&&W.document.readyState!=='loading'&&String(W.location.href).includes(url); }catch(e){ return null; }
       if(fresh&&/login/i.test(W.location.pathname)) throw Object.assign(new Error('CMS 로그인이 풀림'),{stop:1}); return fresh&&ready(W); },60000,what); }
   async function batchOne(W,id,f,opt,say){
-    const step=t=>say(id+': '+t);
+    const t0=Date.now(), step=t=>say(id+': '+t+' ('+Math.round((Date.now()-t0)/1000)+'초)');
     step('수정 화면 여는 중');
-    await navTo(W,'/item/all/modify.donga'+Q+'itemId='+id,w=>w.document.querySelector('[data-editor-url]')&&typeof w.itemApplyAll==='function'&&jsonEls(w).length,'수정 화면');
-    await new Promise(r=>setTimeout(r,500));
+    try{ await navTo(W,'/item/all/modify.donga'+Q+'itemId='+id,w=>w.document.querySelector('[data-editor-url]')&&typeof w.itemApplyAll==='function'&&jsonEls(w).length,'수정 화면'); }
+    catch(er){ if(er.stop) throw er; let d=''; try{ d=' [주소 '+W.location.pathname+W.location.search+' · 상태 '+W.document.readyState+' · 한글편집기 '+(W.document.querySelector('[data-editor-url]')?'O':'X')+' · 전체반영 '+(typeof W.itemApplyAll)+' · 문서 '+jsonEls(W).length+']'; }catch(e){ d=' [작업 창을 읽지 못함]'; }
+      throw Object.assign(new Error(er.message+d),{stop:1}); }   // 화면 감지가 안 되면 다음 문항도 같을 것이라 바로 멈춤
+    await nap(500);
     if(mounted(W)) throw new Error('HTML 편집기가 먼저 열려 있음');
     const r=pasteDocs(f.edits||[],W); if(!r.ok) throw new Error('HTML 수정안 안 맞음: '+r.rep.filter(x=>!x.ok).map(x=>(x.ed.field||'')+' '+x.msg).join(' / '));
     let om=null; try{ om=await fillOmr(W); }catch(er){ om={ok:false,msg:er.message}; } if(om&&!om.ok) throw new Error('OMR: '+om.msg);
+    const htmlCh=r.rep.some(x=>!x.already), omrCh=!!(om&&om.ok&&!om.skip), already=r.rep.filter(x=>x.already).length;
     let hdone=[]; if(f.hml&&f.hml.length){ step('HML 고치는 중'); const ed=openHwp(W); if(!ed) throw Object.assign(new Error('편집기 팝업이 막힘 → 이 사이트 팝업 허용'),{stop:1});
       try{ hdone=await hmlRun(ed,f.hml,t=>step(t),W); }catch(er){ try{ ed.close(); }catch(x){} throw new Error('HML: '+er.message); } }
-    step('전체 반영 중'); W.__hmlMark=1; W.itemApplyAll();
+    let ap='';
+    const approve=async()=>{ step('승인 중');
+      if(!isDetail(W)||!String(W.location.search).includes('itemId='+id)) await navTo(W,'/item/all/detail.donga'+Q+'itemId='+id,w=>w.document.getElementById('statusFields')&&w.document.querySelector('[data-status-save]'),'상세 화면');
+      try{ ap=await approveIn(W); }catch(er){ throw Object.assign(new Error('반영됨, 승인 실패: '+er.message),{applied:1}); } };
+    if(!htmlCh&&!omrCh&&!hdone.length){   // 바꿀 것이 없음 = 이미 고쳐진 문항 → 반영 없이(승인만) 넘어감
+      if(opt.approve) await approve();
+      return '이미 수정됨(반영 안 함)'+(ap?' · '+ap:''); }
+    step('전체 반영 중'); const od=W.document; W.itemApplyAll();
     const modal=W.document.getElementById('applyAllModal');
     try{ await waitFor(()=>modal&&modal.classList.contains('show'),6000,'반영 확인창'); }catch(er){ throw new Error('전체 반영 막힘: '+(toastOf(W)||'필수 항목·정답 등')); }
-    await new Promise(r=>setTimeout(r,300)); modal.querySelector('[data-action-ok]').click();
-    await waitFor(()=>{ let gone=false; try{ gone=!W.__hmlMark&&W.document.readyState==='complete'; }catch(e){} return gone; },90000,'반영 저장');
+    await nap(300); modal.querySelector('[data-action-ok]').click();
+    await waitFor(()=>{ let gone=false; try{ gone=W.document!==od&&W.document.readyState!=='loading'; }catch(e){} return gone; },90000,'반영 저장');
     if(/modify\.donga/.test(W.location.pathname)) throw new Error('반영 뒤에도 수정 화면에 머묾: '+toastOf(W));
     const bad=await verifyFix(id,f.edits||[]).catch(er=>['확인 못함: '+er.message]); if(bad.length) throw Object.assign(new Error('반영했지만 확인 필요: '+bad.join('; ')),{applied:1});
-    let ap=''; if(opt.approve){ step('승인 중');
-      if(!isDetail(W)||!String(W.location.search).includes('itemId='+id)) await navTo(W,'/item/all/detail.donga'+Q+'itemId='+id,w=>w.document.getElementById('statusFields')&&w.document.querySelector('[data-status-save]'),'상세 화면');
-      try{ ap=await approveIn(W); }catch(er){ throw Object.assign(new Error('반영됨, 승인 실패: '+er.message),{applied:1}); } }
-    return 'HTML '+(f.edits||[]).length+(hdone.length?' · HML '+hdone.map(x=>HSLOT[x]).join('·'):'')+' 반영'+(ap?' · '+ap:''); }
+    if(opt.approve) await approve();
+    return (already?'이미 고쳐진 것 '+already+' · ':'')+'HTML '+(f.edits||[]).length+(hdone.length?' · HML '+hdone.map(x=>HSLOT[x]).join('·'):'')+' 반영'+(ap?' · '+ap:''); }
   async function batchRun(opt){ const say=t=>{ const m=box()&&box().querySelector('[data-bmsg]'); if(m) m.textContent=t; };
     const ix=await loadPre(); if(!ix) { say('HML_DOWNLOAD 폴더를 먼저 연결하세요.'); return; }
     const L=BL.get(), order=((ix.must||[]).map(m=>m.id)).concat(Object.keys(ix.idx)).filter((x,i,a)=>a.indexOf(x)===i);
     const todo=order.filter(id=>{ const e=ix.idx[id], f=e&&e.fix; if(!f) return false; if(opt.onlyApproved&&!f.approved) return false;
-      const ok=(/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); return ok&&!(L[id]&&/^(완료|반영)/.test(L[id].st)); }).slice(0,opt.n);
+      const ok=(/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); const FL=FX.log(), dm=doneMap(); return ok&&!(L[id]&&/^(완료|반영)/.test(L[id].st))&&!(FL[id]&&/^반영/.test(FL[id].st||''))&&!dm[id]; }).slice(0,opt.n);
     if(!todo.length){ say('돌릴 문항이 없습니다(모두 끝났거나 수정안 없음).'); return; }
     const RR=opt.recheck?await recheckRoot():null;   // 쓰기 권한 묻기는 팝업보다 먼저(클릭 직후여야 함)
     const W=window.open('about:blank','hmlBatchWork','width=1280,height=900'); if(!W){ say('팝업이 막혔습니다. 팝업 허용 후 다시 누르세요.'); return; }
@@ -437,7 +453,7 @@ window.__hmlAi3Build='2026-11-20 09:43';
       const k=/정답\s*입력/.test(ph)?'answer':/뒤\s*수식어/.test(ph)?'suffix':/앞\s*수식어/.test(ph)?'prefix':null; if(!k) return;
       if(!cur||k==='prefix'||cur[k]){ cur={}; rows.push(cur); } cur[k]=el; });
     return rows.filter(r=>r.answer); }
-  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  const sleep=ms=>nap(ms);
   async function fillOmr(W=window){ const tab=tabBtn('OMR 수정',W); if(tab){ tab.click(); await sleep(700); }
     let rows=omrRows(W); if(!rows.length) return null;
     if(rows.some(r=>String(fieldVal(r.answer)).trim())) return null;   // 이미 정답이 있음
