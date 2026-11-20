@@ -1,5 +1,5 @@
-/* HML AI 눈검수 2026-11-20 12:57 */
-window.__hmlAi3Build='2026-11-20 12:57';
+/* HML AI 눈검수 2026-11-20 15:32 */
+window.__hmlAi3Build='2026-11-20 15:32';
 // AI 눈검수(ver3): 바로 검사(ver2) 옆 칸에 'AI 눈검수' 칸을 붙임.
 // 버튼을 누르면 이 문항의 HML 캡처(문제·해답)와 HTML 내용을 AI(기본 Claude Haiku 5.5)에 보내 비교하고, 원하면 문제풀이·메타정보도 판단함.
 // API 키와 캡처 이미지는 확장(배경)에서만 다룸: 이 페이지 코드는 키를 볼 수 없음. CMS에 쓰는 것은 수정안 [붙여넣기]·[반영]을 누를 때뿐.
@@ -336,8 +336,8 @@ window.__hmlAi3Build='2026-11-20 12:57';
       throw Object.assign(new Error(er.message+d),{stop:1}); }   // 수정 화면인데 감지가 안 되면 다음 문항도 같을 것이라 바로 멈춤
     await nap(500);
     if(mounted(W)) throw new Error('HTML 편집기가 먼저 열려 있음');
-    const r=pasteDocs(f.edits||[],W); if(!r.ok) throw new Error('HTML 수정안 안 맞음: '+r.rep.filter(x=>!x.ok).map(x=>(x.ed.field||'')+' '+x.msg).join(' / '));
-    let om=null; try{ om=await fillOmr(W); }catch(er){ om={ok:false,msg:er.message}; } if(om&&!om.ok) throw new Error('OMR: '+om.msg);
+    const r=pasteDocs(f.edits||[],W); if(!r.ok) throw Object.assign(new Error('HTML 수정안 안 맞음: '+r.rep.filter(x=>!x.ok).map(x=>(x.ed.field||'')+' '+x.msg).join(' / ')),{manual:1});
+    let om=null; try{ om=await fillOmr(W); }catch(er){ om={ok:false,msg:er.message}; } if(om&&!om.ok) throw Object.assign(new Error('OMR: '+om.msg),{manual:1});
     const htmlCh=r.rep.some(x=>!x.already), omrCh=!!(om&&om.ok&&!om.skip), already=r.rep.filter(x=>x.already).length;
     r.rep.forEach(x=>{ if(!x.already) add('HTML',x.ed.field||'',x.ed.find,x.ed.replace,x.ed.src||''); });
     if(omrCh) add('OMR','정답','(빈칸)',om.msg||'',om.warn?'확인 필요':'');
@@ -368,7 +368,7 @@ window.__hmlAi3Build='2026-11-20 12:57';
     const L=BL.get(), order=((ix.must||[]).map(m=>m.id)).concat(Object.keys(ix.idx)).filter((x,i,a)=>a.indexOf(x)===i);
     const todo=order.filter(id=>{ const e=ix.idx[id], f=e&&e.fix; if(!f) return false; if(opt.onlyApproved&&!f.approved) return false;
       // '준비'와 'AI 아직'(규칙 수정만 먼저 반영, 나머지 지적은 직접) 둘 다 돌림
-      const ok=(/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); return ok&&!(L[id]&&/^(완료|반영)/.test(L[id].st)); });   // 이미 반영한 문항(완료·반영 확인 필요)은 수정안이 바뀌어도 다시 안 돌림
+      const ok=(/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); return ok&&!(L[id]&&(/^(완료|반영)/.test(L[id].st)||(L[id].st==='직접 수정'&&L[id].sig===fixSig(f)))); });   // 직접 수정 문항은 수정안이 바뀌었을 때만 다시   // 이미 반영한 문항(완료·반영 확인 필요)은 수정안이 바뀌어도 다시 안 돌림
     const all=todo.length, failed=todo.filter(id=>L[id]), fresh=todo.filter(id=>!L[id]);
     todo.length=0; todo.push(...fresh.concat(failed).slice(0,opt.n));   // 처음 하는 문항 먼저, 전에 건너뛴 문항은 뒤에
     const doneN=Object.keys(L).filter(id=>/^(완료|반영)/.test(L[id].st)).length;
@@ -383,7 +383,7 @@ window.__hmlAi3Build='2026-11-20 12:57';
       try{ const t=await batchOne(W,id,f,opt,x=>say('['+(i+1)+'/'+todo.length+'] '+x),det); await fin(); L[id]={st:'완료',msg:t,at:Date.now(),sig:fixSig(f)}; ok++; fails=0;
         if(RR) try{ await recheckAdd(RR,id,ix); }catch(er){ L[id].msg+=' · 재검수 목록 못 씀: '+er.message; }
         const d=doneMap(); d[id]=Date.now(); LS('hmlAi3MustDone',JSON.stringify(d)); const FL=FX.log(); FL[id]=Object.assign(FL[id]||{},{st:'반영',at:Date.now()}); FX.saveLog(FL); }
-      catch(er){ if(er.applied) await fin(); L[id]={st:er.applied?'반영(확인 필요)':'건너뜀',msg:er.message,at:Date.now()}; bad++; if(!er.applied) fails++;   // 반영은 된 문항(확인만 필요)은 연속 실패로 안 셈
+      catch(er){ if(er.applied) await fin(); L[id]={st:er.applied?'반영(확인 필요)':er.manual?'직접 수정':'건너뜀',msg:er.message,at:Date.now(),sig:fixSig(f)}; bad++; if(!er.applied&&!er.manual) fails++;   // 수정안이 안 맞는 문항은 기록만(연속 실패로 안 셈)   // 반영은 된 문항(확인만 필요)은 연속 실패로 안 셈
         if(er.stop){ BL.set(L); say('멈춤: '+er.message); break; }
         if(fails>=3){ BL.set(L); say('연속 3번 실패해서 멈춤. 마지막: '+id+' '+er.message); break; } }
       BL.set(L); }
@@ -402,8 +402,8 @@ window.__hmlAi3Build='2026-11-20 12:57';
   function batchBar(ix){ const el=box()&&box().querySelector('[data-batch]'); if(!el) return; if(!ix){ el.innerHTML=''; return; }
     const ids=Object.keys(ix.idx).filter(id=>ix.idx[id].fix); if(!ids.length){ el.innerHTML=''; return; }
     const L=BL.get(), dn=ids.filter(id=>L[id]&&/^(완료|반영)/.test(L[id].st)).length;
-    const can=ids.filter(id=>{ const f=ix.idx[id].fix; return (/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); }), left=can.filter(id=>!(L[id]&&/^(완료|반영)/.test(L[id].st))).length;
-    el.innerHTML='<details style="font-size:12px;margin-top:4px"'+(A.batchBusy?' open':'')+'><summary style="cursor:pointer;color:#e8590c;font-weight:bold">일괄 수정 (고칠 문항 '+can.length+' · 남은 '+left+' · 완료 '+dn+' · 수정안 없음 '+(ids.length-can.length)+')</summary><div style="background:#fff;border:1px solid #e8590c;border-radius:6px;padding:6px 8px;margin-top:4px">'+
+    const can=ids.filter(id=>{ const f=ix.idx[id].fix; return (/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); }), left=can.filter(id=>!(L[id]&&/^(완료|반영|직접)/.test(L[id].st))).length, man=ids.filter(id=>L[id]&&L[id].st==='직접 수정').length;
+    el.innerHTML='<details style="font-size:12px;margin-top:4px"'+(A.batchBusy?' open':'')+'><summary style="cursor:pointer;color:#e8590c;font-weight:bold">일괄 수정 (고칠 문항 '+can.length+' · 남은 '+left+' · 완료 '+dn+(man?' · 직접 수정 '+man:'')+' · 수정안 없음 '+(ids.length-can.length)+')</summary><div style="background:#fff;border:1px solid #e8590c;border-radius:6px;padding:6px 8px;margin-top:4px">'+
       '<div>수정안대로 <b>HTML·HML 수정 → 전체 반영 → 확인 → 승인</b>을 사람 없이 차례로 합니다. 안 맞거나 확인 실패면 그 문항은 건너뛰고, 연속 3번 실패하면 멈춥니다.</div>'+
       '<div style="margin-top:4px">이번에 <input data-bn type="number" min="1" value="'+esc(LS('hmlAi3BatchN')||'5')+'" style="width:56px"> 문항 '+
       '<label><input type="checkbox" data-bap'+(LS('hmlAi3BatchApprove')!=='0'?' checked':'')+'> 승인(사용)까지</label> <label title="고친 문항의 새 HTML을 HML_DOWNLOAD/일괄수정_재검수.json에 모음 → PC에서 python 엄격검사.py 재검수"><input type="checkbox" data-brc'+(LS('hmlAi3BatchRecheck')!=='0'?' checked':'')+'> 재검수 목록 남기기</label> '+(ix.fixApproved?'<label><input type="checkbox" data-bonly'+(LS('hmlAi3BatchOnlyAp')!=='0'?' checked':'')+'> 승인본만</label>':'')+'</div>'+
