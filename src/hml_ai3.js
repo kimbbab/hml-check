@@ -62,7 +62,8 @@
     const rd=await readJson(root,'다시일괄.json'); let redo=null;
     if(rd&&Array.isArray(rd.items)){ redo={made:String(rd.made||''),ids:{}}; for(const q of rd.items){ if(!q.itemId) continue; const id=String(q.itemId), e=at(id); redo.ids[id]=1;
         if(e.sid==null&&q.sid) e.sid=q.sid; if(e.no==null&&q.no) e.no=q.no;
-        if(Array.isArray(q.edits)) e.fix=Object.assign(e.fix||{note:'',hml:[],hml_also:false},{state:'준비',edits:q.edits.map(x=>({field:x.field,find:x.find,replace:x.replace,all:!!x.all,src:x.src||'다시',why:x.why||''}))}); } }
+        if(Array.isArray(q.edits)) e.fix=Object.assign(e.fix||{note:'',hml:[],hml_also:false},{state:'준비',edits:q.edits.map(x=>({field:x.field,find:x.find,replace:x.replace,all:!!x.all,src:x.src||'다시',why:x.why||''}))});
+        if(Array.isArray(q.hml)) e.fix=Object.assign(e.fix||{note:'',edits:[],hml_also:false,state:'준비'},{hml:hmlOf(q)}); } }   // HML 수정안(HML수정안.py): edits:[] 와 함께 오면 HML만 고침
     const dirs=[]; for await (const [name,h] of root.entries()) if(h.kind==='directory'&&/^\d+_/.test(name)) dirs.push([name,h]);
     let k=0, n=0; const one=async()=>{ while(k<dirs.length){ const [name,h]=dirs[k++]; n++; if(msg&&n%20===0) msg('폴더 읽는 중… '+n+'/'+dirs.length);
         const sid=name.split('_')[0]; const ai=await readJson(h,'ai.json'), me=await readJson(h,'메타점검.json');
