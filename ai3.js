@@ -1,5 +1,5 @@
-/* HML AI 눈검수 2026-11-20 15:32 */
-window.__hmlAi3Build='2026-11-20 15:32';
+/* HML AI 눈검수 2026-11-23 07:24 */
+window.__hmlAi3Build='2026-11-23 07:24';
 // AI 눈검수(ver3): 바로 검사(ver2) 옆 칸에 'AI 눈검수' 칸을 붙임.
 // 버튼을 누르면 이 문항의 HML 캡처(문제·해답)와 HTML 내용을 AI(기본 Claude Haiku 5.5)에 보내 비교하고, 원하면 문제풀이·메타정보도 판단함.
 // API 키와 캡처 이미지는 확장(배경)에서만 다룸: 이 페이지 코드는 키를 볼 수 없음. CMS에 쓰는 것은 수정안 [붙여넣기]·[반영]을 누를 때뿐.
@@ -60,6 +60,11 @@ window.__hmlAi3Build='2026-11-20 15:32';
     const fx=await readJson(root,'수정본.json'), ap=await readJson(root,'수정본_승인.json'); let fixN=0;
     if(fx&&Array.isArray(fx.items)) for(const q of fx.items){ if(!q.itemId) continue; at(String(q.itemId)).fix={state:q.state,edits:(q.edits||[]).map(x=>({field:x.field,find:x.find,replace:x.replace,all:!!x.all,src:x.src,why:x.why})),note:q.note||'',hml_also:!!q.hml_also,hml:hmlOf(q)}; fixN++; }
     if(ap&&Array.isArray(ap.items)) for(const q of ap.items){ if(!q.itemId) continue; const e=at(String(q.itemId)); e.fix=Object.assign(e.fix||{note:''},{state:'준비',approved:true,hml_also:!!q.hml_also,hml:hmlOf(q),edits:(q.edits||[]).map(x=>({field:x.field,find:x.find,replace:x.replace,all:!!x.all,src:x.src,why:(x.why||'')}))}); }
+    // 다시 일괄(다시일괄.json, 재검수 뒤 PC에서 만듦): 이 문항들은 '완료'여도 한 번 더 돌림. edits가 있으면 그 수정안으로 바꿈(되돌리기 등)
+    const rd=await readJson(root,'다시일괄.json'); let redo=null;
+    if(rd&&Array.isArray(rd.items)){ redo={made:String(rd.made||''),ids:{}}; for(const q of rd.items){ if(!q.itemId) continue; const id=String(q.itemId), e=at(id); redo.ids[id]=1;
+        if(e.sid==null&&q.sid) e.sid=q.sid; if(e.no==null&&q.no) e.no=q.no;
+        if(Array.isArray(q.edits)) e.fix=Object.assign(e.fix||{note:'',hml:[],hml_also:false},{state:'준비',edits:q.edits.map(x=>({field:x.field,find:x.find,replace:x.replace,all:!!x.all,src:x.src||'다시',why:x.why||''}))}); } }
     const dirs=[]; for await (const [name,h] of root.entries()) if(h.kind==='directory'&&/^\d+_/.test(name)) dirs.push([name,h]);
     let k=0, n=0; const one=async()=>{ while(k<dirs.length){ const [name,h]=dirs[k++]; n++; if(msg&&n%20===0) msg('폴더 읽는 중… '+n+'/'+dirs.length);
         const sid=name.split('_')[0]; const ai=await readJson(h,'ai.json'), me=await readJson(h,'메타점검.json');
@@ -67,7 +72,7 @@ window.__hmlAi3Build='2026-11-20 15:32';
           if(it.vision) e.vision=it.vision; if(Array.isArray(it.problem)&&it.problem.length) e.problem=it.problem; if(ai.model) e.model=ai.model; }
         for(const [no,it] of Object.entries((me&&me.items)||{})){ if(!it||!it.itemId||!(it.issues||[]).length) continue; const e=at(String(it.itemId)); e.sid=e.sid||sid; e.no=e.no||no; e.meta=it.issues; } } };
     await Promise.all(Array.from({length:8},one));
-    return {at:Date.now(),made:(j&&j.made)||(w&&w.made),sheets:dirs.length,n:Object.keys(idx).length,idx,must,mustMade:w&&w.made,mustTitle:w&&w.title,mustMissing:w&&w.missing,fixMade:fx&&fx.made,fixApproved:!!ap}; }
+    return {at:Date.now(),made:(j&&j.made)||(w&&w.made),sheets:dirs.length,n:Object.keys(idx).length,idx,must,mustMade:w&&w.made,mustTitle:w&&w.title,mustMissing:w&&w.missing,redo,fixMade:fx&&fx.made,fixApproved:!!ap}; }
   async function loadPre(){ if(A.pre!==undefined) return A.pre; try{ A.pre=(await kvGet('index'))||null; }catch(e){ A.pre=null; } return A.pre; }
   async function connect(pick){ const P=box()&&box().querySelector('[data-pre]'); const say=t=>{ if(P) P.innerHTML='<span style="color:#666">'+esc(t)+'</span>'; };
     try{ let root=pick?null:await kvGet('root').catch(()=>null);
@@ -366,9 +371,10 @@ window.__hmlAi3Build='2026-11-20 15:32';
   async function batchRun(opt){ const say=t=>{ const m=box()&&box().querySelector('[data-bmsg]'); if(m) m.textContent=t; };
     const ix=await loadPre(); if(!ix) { say('HML_DOWNLOAD 폴더를 먼저 연결하세요.'); return; }
     const L=BL.get(), order=((ix.must||[]).map(m=>m.id)).concat(Object.keys(ix.idx)).filter((x,i,a)=>a.indexOf(x)===i);
+    const R=ix.redo, again=id=>!!(R&&R.ids[id]&&!(L[id]&&L[id].redo===R.made));
     const todo=order.filter(id=>{ const e=ix.idx[id], f=e&&e.fix; if(!f) return false; if(opt.onlyApproved&&!f.approved) return false;
       // '준비'와 'AI 아직'(규칙 수정만 먼저 반영, 나머지 지적은 직접) 둘 다 돌림
-      const ok=(/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); return ok&&!(L[id]&&(/^(완료|반영)/.test(L[id].st)||(L[id].st==='직접 수정'&&L[id].sig===fixSig(f)))); });   // 직접 수정 문항은 수정안이 바뀌었을 때만 다시   // 이미 반영한 문항(완료·반영 확인 필요)은 수정안이 바뀌어도 다시 안 돌림
+      const ok=(/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); return ok&&(again(id)||!(L[id]&&(/^(완료|반영)/.test(L[id].st)||(L[id].st==='직접 수정'&&L[id].sig===fixSig(f))))); });   // 다시일괄.json 문항은 그 목록 기준으로 한 번 더   // 직접 수정 문항은 수정안이 바뀌었을 때만 다시   // 이미 반영한 문항(완료·반영 확인 필요)은 수정안이 바뀌어도 다시 안 돌림
     const all=todo.length, failed=todo.filter(id=>L[id]), fresh=todo.filter(id=>!L[id]);
     todo.length=0; todo.push(...fresh.concat(failed).slice(0,opt.n));   // 처음 하는 문항 먼저, 전에 건너뛴 문항은 뒤에
     const doneN=Object.keys(L).filter(id=>/^(완료|반영)/.test(L[id].st)).length;
@@ -380,10 +386,10 @@ window.__hmlAi3Build='2026-11-20 15:32';
     for(let i=0;i<todo.length;i++){ if(A.batchStop){ say('멈춤(사용자). '+ok+' 완료 · '+bad+' 건너뜀'); break; }
       const id=todo[i], f=ix.idx[id].fix; say('['+(i+1)+'/'+todo.length+'] '+id+' (이미 완료 '+doneN+' 건너뜀 · 남은 '+all+')');
       const det=[], e0=ix.idx[id]||{}, fin=async()=>{ det.forEach(r=>{ r.sid=e0.sid; r.sname=e0.sname; r.no=e0.no; }); await detailAdd(det); };
-      try{ const t=await batchOne(W,id,f,opt,x=>say('['+(i+1)+'/'+todo.length+'] '+x),det); await fin(); L[id]={st:'완료',msg:t,at:Date.now(),sig:fixSig(f)}; ok++; fails=0;
+      try{ const t=await batchOne(W,id,f,opt,x=>say('['+(i+1)+'/'+todo.length+'] '+x),det); await fin(); L[id]={st:'완료',msg:t,at:Date.now(),sig:fixSig(f)}; ok++; fails=0; if(R&&R.ids[id]) L[id].redo=R.made;
         if(RR) try{ await recheckAdd(RR,id,ix); }catch(er){ L[id].msg+=' · 재검수 목록 못 씀: '+er.message; }
         const d=doneMap(); d[id]=Date.now(); LS('hmlAi3MustDone',JSON.stringify(d)); const FL=FX.log(); FL[id]=Object.assign(FL[id]||{},{st:'반영',at:Date.now()}); FX.saveLog(FL); }
-      catch(er){ if(er.applied) await fin(); L[id]={st:er.applied?'반영(확인 필요)':er.manual?'직접 수정':'건너뜀',msg:er.message,at:Date.now(),sig:fixSig(f)}; bad++; if(!er.applied&&!er.manual) fails++;   // 수정안이 안 맞는 문항은 기록만(연속 실패로 안 셈)   // 반영은 된 문항(확인만 필요)은 연속 실패로 안 셈
+      catch(er){ if(er.applied) await fin(); L[id]={st:er.applied?'반영(확인 필요)':er.manual?'직접 수정':'건너뜀',msg:er.message,at:Date.now(),sig:fixSig(f)}; if(R&&R.ids[id]&&(er.applied||er.manual)) L[id].redo=R.made; bad++; if(!er.applied&&!er.manual) fails++;   // 수정안이 안 맞는 문항은 기록만(연속 실패로 안 셈)   // 반영은 된 문항(확인만 필요)은 연속 실패로 안 셈
         if(er.stop){ BL.set(L); say('멈춤: '+er.message); break; }
         if(fails>=3){ BL.set(L); say('연속 3번 실패해서 멈춤. 마지막: '+id+' '+er.message); break; } }
       BL.set(L); }
