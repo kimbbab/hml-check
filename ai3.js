@@ -1,5 +1,5 @@
-/* HML AI 눈검수 2026-11-23 07:34 */
-window.__hmlAi3Build='2026-11-23 07:34';
+/* HML AI 눈검수 2026-11-23 08:55 */
+window.__hmlAi3Build='2026-11-23 08:55';
 // AI 눈검수(ver3): 바로 검사(ver2) 옆 칸에 'AI 눈검수' 칸을 붙임.
 // 버튼을 누르면 이 문항의 HML 캡처(문제·해답)와 HTML 내용을 AI(기본 Claude Haiku 5.5)에 보내 비교하고, 원하면 문제풀이·메타정보도 판단함.
 // API 키와 캡처 이미지는 확장(배경)에서만 다룸: 이 페이지 코드는 키를 볼 수 없음. CMS에 쓰는 것은 수정안 [붙여넣기]·[반영]을 누를 때뿐.
@@ -64,7 +64,8 @@ window.__hmlAi3Build='2026-11-23 07:34';
     const rd=await readJson(root,'다시일괄.json'); let redo=null;
     if(rd&&Array.isArray(rd.items)){ redo={made:String(rd.made||''),ids:{}}; for(const q of rd.items){ if(!q.itemId) continue; const id=String(q.itemId), e=at(id); redo.ids[id]=1;
         if(e.sid==null&&q.sid) e.sid=q.sid; if(e.no==null&&q.no) e.no=q.no;
-        if(Array.isArray(q.edits)) e.fix=Object.assign(e.fix||{note:'',hml:[],hml_also:false},{state:'준비',edits:q.edits.map(x=>({field:x.field,find:x.find,replace:x.replace,all:!!x.all,src:x.src||'다시',why:x.why||''}))}); } }
+        if(Array.isArray(q.edits)) e.fix=Object.assign(e.fix||{note:'',hml:[],hml_also:false},{state:'준비',edits:q.edits.map(x=>({field:x.field,find:x.find,replace:x.replace,all:!!x.all,src:x.src||'다시',why:x.why||''}))});
+        if(Array.isArray(q.hml)) e.fix=Object.assign(e.fix||{note:'',edits:[],hml_also:false,state:'준비'},{hml:hmlOf(q)}); } }   // HML 수정안(HML수정안.py): edits:[] 와 함께 오면 HML만 고침
     const dirs=[]; for await (const [name,h] of root.entries()) if(h.kind==='directory'&&/^\d+_/.test(name)) dirs.push([name,h]);
     let k=0, n=0; const one=async()=>{ while(k<dirs.length){ const [name,h]=dirs[k++]; n++; if(msg&&n%20===0) msg('폴더 읽는 중… '+n+'/'+dirs.length);
         const sid=name.split('_')[0]; const ai=await readJson(h,'ai.json'), me=await readJson(h,'메타점검.json');
