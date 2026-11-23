@@ -375,7 +375,7 @@
       // '준비'와 'AI 아직'(규칙 수정만 먼저 반영, 나머지 지적은 직접) 둘 다 돌림
       const ok=(/^(준비|AI 아직)$/.test(f.state)&&f.edits&&f.edits.length)||(f.hml&&f.hml.length); return ok&&(again(id)||!(L[id]&&(/^(완료|반영)/.test(L[id].st)||(L[id].st==='직접 수정'&&L[id].sig===fixSig(f))))); });   // 다시일괄.json 문항은 그 목록 기준으로 한 번 더   // 직접 수정 문항은 수정안이 바뀌었을 때만 다시   // 이미 반영한 문항(완료·반영 확인 필요)은 수정안이 바뀌어도 다시 안 돌림
     const all=todo.length, failed=todo.filter(id=>L[id]), fresh=todo.filter(id=>!L[id]);
-    todo.length=0; todo.push(...fresh.concat(failed).slice(0,opt.n));   // 처음 하는 문항 먼저, 전에 건너뛴 문항은 뒤에
+    const re=todo.filter(again); todo.length=0; todo.push(...re.concat(fresh.filter(id=>!again(id)),failed.filter(id=>!again(id))).slice(0,opt.n));   // 다시일괄 문항 먼저, 그다음 처음 하는 문항, 전에 건너뛴 문항은 뒤에
     const doneN=Object.keys(L).filter(id=>/^(완료|반영)/.test(L[id].st)).length;
     if(!todo.length){ say('돌릴 문항이 없습니다(모두 끝났거나 수정안 없음).'); return; }
     const RR=opt.recheck?await recheckRoot():null;   // 쓰기 권한 묻기는 팝업보다 먼저(클릭 직후여야 함)
