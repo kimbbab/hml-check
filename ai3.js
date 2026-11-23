@@ -1,5 +1,5 @@
-/* HML AI 눈검수 2026-11-23 08:55 */
-window.__hmlAi3Build='2026-11-23 08:55';
+/* HML AI 눈검수 2026-11-23 09:23 */
+window.__hmlAi3Build='2026-11-23 09:23';
 // AI 눈검수(ver3): 바로 검사(ver2) 옆 칸에 'AI 눈검수' 칸을 붙임.
 // 버튼을 누르면 이 문항의 HML 캡처(문제·해답)와 HTML 내용을 AI(기본 Claude Haiku 5.5)에 보내 비교하고, 원하면 문제풀이·메타정보도 판단함.
 // API 키와 캡처 이미지는 확장(배경)에서만 다룸: 이 페이지 코드는 키를 볼 수 없음. CMS에 쓰는 것은 수정안 [붙여넣기]·[반영]을 누를 때뿐.
@@ -232,16 +232,16 @@ window.__hmlAi3Build='2026-11-23 08:55';
       if(!b.classList.contains('active')){ ed.document.querySelector('[data-webhwp-status]').textContent=''; b.click();
         await until(()=>{ if(/못했습니다/.test(st())) throw hard(HSLOT[s]+' 파일을 열지 못함'); return /열었습니다/.test(st())&&b.classList.contains('active'); },90000,HSLOT[s]+' 열기'); }
       await nap(800); const H=Hf(), eqs=hEqs(H), probs=[];
-      const findTxt=t=>{ H.MovePos(2); const a=H.CreateAction('RepeatFind'), z=a.CreateSet(); a.GetDefault(z); z.SetItem('FindString',t); z.SetItem('Direction',0); z.SetItem('IgnoreMessage',1); return a.Execute(z); };
+      const findTxt=(t,k)=>{ H.MovePos(2); let ok=false; for(let j=0;j<Math.max(1,k||1);j++){ const a=H.CreateAction('RepeatFind'), z=a.CreateSet(); a.GetDefault(z); z.SetItem('FindString',t); z.SetItem('Direction',0); z.SetItem('IgnoreMessage',1); ok=a.Execute(z); if(!ok) break; } return ok; };   // k번째 나온 곳(글자 수정안 nth)
       by[s].forEach((x,i)=>{ if(x.eq==null) return; const hit=eqs.filter(c=>nz(hEq(c))===nz(x.eq));
         if(!hit.length&&eqs.some(c=>nz(hEq(c))===nz(x.to))){ x._done=1; return; }   // 이미 고쳐짐
         if(x.nth){ if(hit.length<x.nth) probs.push('"'+x.eq+'" '+hit.length+'개뿐'); else x._c=hit[x.nth-1]; } else if(hit.length!==1) probs.push('"'+x.eq+'" '+hit.length+'개'); else x._c=hit[0]; });
       if(probs.length) throw new Error(HSLOT[s]+' 수식이 안 맞아 HML은 저장 안 함: '+probs.join(', ')+' (이 칸 수식: '+eqs.map(hEq).join(' | ').slice(0,300)+')');
-      for(const x of by[s]) if(x.eq==null&&!findTxt(x.text)&&findTxt(x.to)) x._done=1;   // 글자도 이미 고쳐졌으면 건너뜀
+      for(const x of by[s]) if(x.eq==null&&!findTxt(x.text,x.nth)&&findTxt(x.to)) x._done=1;   // 글자도 이미 고쳐졌으면 건너뜀
       if(by[s].every(x=>x._done)){ say(HSLOT[s]+' HML은 이미 고쳐져 있음'); continue; }
       for(const x of by[s]){ if(x._done) continue;
         if(x.eq!=null){ const p=x._c.Properties; p.SetItem('String',x.to); x._c.Properties=p; if(nz(hEq(x._c))!==nz(x.to)) throw new Error('수식 바꾸기 반영 안 됨: '+x.eq); }
-        else { if(!findTxt(x.text)) throw new Error(HSLOT[s]+' 글자 "'+x.text+'" 없음'); H.Run('Delete'); const ia=H.CreateAction('InsertText'), is=ia.CreateSet(); ia.GetDefault(is); is.SetItem('Text',x.to); if(!ia.Execute(is)) throw new Error('글자 넣기 실패'); } }
+        else { if(!findTxt(x.text,x.nth)) throw new Error(HSLOT[s]+' 글자 "'+x.text+'" 없음'); H.Run('Delete'); const ia=H.CreateAction('InsertText'), is=ia.CreateSet(); ia.GetDefault(is); is.SetItem('Text',x.to); if(!ia.Execute(is)) throw new Error('글자 넣기 실패'); } }
       say(HSLOT[s]+' 저장 중…'); closeM(); const before=W.webhwpSavedHml[s]||'';
       ed.document.querySelector('[data-webhwp-action=save]').click();
       await until(()=>{ if(/실패|읽지 못했습니다/.test(st())) throw hard(HSLOT[s]+' 저장 실패: '+st()); return (W.webhwpSavedHml[s]||'')!==before&&W.webhwpSavedImage[s]; },120000,HSLOT[s]+' 저장');
