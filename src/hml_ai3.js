@@ -234,12 +234,12 @@
       by[s].forEach((x,i)=>{ if(x.eq==null) return; const hit=eqs.filter(c=>nz(hEq(c))===nz(x.eq));
         if(!hit.length&&eqs.some(c=>nz(hEq(c))===nz(x.to))){ x._done=1; return; }   // 이미 고쳐짐
         if(x.nth){ if(hit.length<x.nth) probs.push('"'+x.eq+'" '+hit.length+'개뿐'); else x._c=hit[x.nth-1]; } else if(hit.length!==1) probs.push('"'+x.eq+'" '+hit.length+'개'); else x._c=hit[0]; });
-      if(probs.length) throw new Error(HSLOT[s]+' 수식이 안 맞아 HML은 저장 안 함: '+probs.join(', ')+' (이 칸 수식: '+eqs.map(hEq).join(' | ').slice(0,300)+')');
+      if(probs.length) throw Object.assign(new Error(HSLOT[s]+' 수식이 안 맞아 HML은 저장 안 함: '+probs.join(', ')+' (이 칸 수식: '+eqs.map(hEq).join(' | ').slice(0,300)+')'),{manual:1});   // 수정안이 안 맞음 → 직접 수정(연속 실패로 안 셈)
       for(const x of by[s]) if(x.eq==null&&!findTxt(x.text,x.nth)&&findTxt(x.to)) x._done=1;   // 글자도 이미 고쳐졌으면 건너뜀
       if(by[s].every(x=>x._done)){ say(HSLOT[s]+' HML은 이미 고쳐져 있음'); continue; }
       for(const x of by[s]){ if(x._done) continue;
         if(x.eq!=null){ const p=x._c.Properties; p.SetItem('String',x.to); x._c.Properties=p; if(nz(hEq(x._c))!==nz(x.to)) throw new Error('수식 바꾸기 반영 안 됨: '+x.eq); }
-        else { if(!findTxt(x.text,x.nth)) throw new Error(HSLOT[s]+' 글자 "'+x.text+'" 없음'); H.Run('Delete'); const ia=H.CreateAction('InsertText'), is=ia.CreateSet(); ia.GetDefault(is); is.SetItem('Text',x.to); if(!ia.Execute(is)) throw new Error('글자 넣기 실패'); } }
+        else { if(!findTxt(x.text,x.nth)) throw Object.assign(new Error(HSLOT[s]+' 글자 "'+x.text+'" 없음'),{manual:1}); H.Run('Delete'); const ia=H.CreateAction('InsertText'), is=ia.CreateSet(); ia.GetDefault(is); is.SetItem('Text',x.to); if(!ia.Execute(is)) throw new Error('글자 넣기 실패'); } }
       say(HSLOT[s]+' 저장 중…'); closeM(); const before=W.webhwpSavedHml[s]||'';
       ed.document.querySelector('[data-webhwp-action=save]').click();
       await until(()=>{ if(/실패|읽지 못했습니다/.test(st())) throw hard(HSLOT[s]+' 저장 실패: '+st()); return (W.webhwpSavedHml[s]||'')!==before&&W.webhwpSavedImage[s]; },120000,HSLOT[s]+' 저장');
@@ -388,7 +388,7 @@
       try{ const t=await batchOne(W,id,f,opt,x=>say('['+(i+1)+'/'+todo.length+'] '+x),det); await fin(); L[id]={st:'완료',msg:t,at:Date.now(),sig:fixSig(f)}; ok++; fails=0; if(R&&R.ids[id]) L[id].redo=R.made;
         if(RR) try{ await recheckAdd(RR,id,ix); }catch(er){ L[id].msg+=' · 재검수 목록 못 씀: '+er.message; }
         const d=doneMap(); d[id]=Date.now(); LS('hmlAi3MustDone',JSON.stringify(d)); const FL=FX.log(); FL[id]=Object.assign(FL[id]||{},{st:'반영',at:Date.now()}); FX.saveLog(FL); }
-      catch(er){ if(er.applied) await fin(); L[id]={st:er.applied?'반영(확인 필요)':er.manual?'직접 수정':'건너뜀',msg:er.message,at:Date.now(),sig:fixSig(f)}; if(R&&R.ids[id]&&(er.applied||er.manual)) L[id].redo=R.made; bad++; if(!er.applied&&!er.manual) fails++;   // 수정안이 안 맞는 문항은 기록만(연속 실패로 안 셈)   // 반영은 된 문항(확인만 필요)은 연속 실패로 안 셈
+      catch(er){ if(er.applied) await fin(); L[id]={st:er.applied?'반영(확인 필요)':er.manual?'직접 수정':'건너뜀',msg:er.message,at:Date.now(),sig:fixSig(f)}; if(R&&R.ids[id]) L[id].redo=R.made;   // 다시일괄 문항은 실패해도 이번 목록에서는 한 번만(안 그러면 매번 맨 앞에서 같은 실패로 멈춤) bad++; if(!er.applied&&!er.manual) fails++;   // 수정안이 안 맞는 문항은 기록만(연속 실패로 안 셈)   // 반영은 된 문항(확인만 필요)은 연속 실패로 안 셈
         if(er.stop){ BL.set(L); say('멈춤: '+er.message); break; }
         if(fails>=3){ BL.set(L); say('연속 3번 실패해서 멈춤. 마지막: '+id+' '+er.message); break; } }
       BL.set(L); }
